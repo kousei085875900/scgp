@@ -1,65 +1,47 @@
-import Image from "next/image";
+import React from 'react'
 
 export default function Home() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="space-y-12 w-full">
+      <div className="space-y-6">
+        {/* 小見出し */}
+        <div className="text-xs font-bold tracking-widest text-blue-600 uppercase">
+          Expancoov Project Portal
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+        
+        {/* メインタイトル */}
+        <h1 className="text-4xl sm:text-6xl font-black text-gray-950 tracking-tight leading-tight">
+          SCGP<br />
+        </h1>
+
+        {/* 組織概要セクション */}
+        <div className="text-gray-500 text-sm sm:text-base max-w-xl leading-relaxed font-medium whitespace-pre-wrap">
+          {`── 組織概要と開発方針について
+本ポータルサイトは、高度なWeb自動化技術およびソフトウェア拡張モジュールの開発を行う有志の技術開発グループ「SCGP (Shadow Company Gunpack)」の公式ポートフォリオ兼ツール配信プラットフォームです。
+
+当グループでは、Node.jsやPuppeteer環境をベースとしたWebスクレイピング、自動化スクリプト、API連携ツールの設計・開発をはじめ、特定の基盤ソフトウェアに対して高度な機能拡張を行うプラグインおよび追加アドオン（各種アドオンモジュール）の研究開発を行っています。
+
+単なるツールの公開にとどまらず、コードの最適化、動作の軽量化、およびコミュニティ内でのスムーズな技術共有を目的として本ポータルを運用しています。`}
         </div>
-      </main>
+
+        <hr className="border-gray-200 my-6" />
+
+        {/* 重要なお知らせセクション */}
+        <div className="text-gray-500 text-sm sm:text-base max-w-xl leading-relaxed font-medium whitespace-pre-wrap">
+          {`【重要なお知らせ】開発アセットの定義と分類について
+現在、当グループが開発・配備している拡張モジュール「ガンパック（Gun-Pack：銃機シミュレーション/動作スクリプト内包型アドオン）」の仕様について、一部のユーザー間で「単なる外見を変更するだけのスキンパック（テクスチャ変更アセット）」との混同が見受けられます。トラブル防止のため、以下の通り定義を明確化いたします。
+
+・スキンパック（Skin-Pack）：
+既存オブジェクトの表面的なビジュアル（テクスチャ）のみを変更する、デザイン主体のデータです。
+
+・ガンパック（Gun-Pack / scaddon互換）：
+コアシステムとなる「scaddon」の基盤に対して、独自の動作ロジック、射撃レート制御スクリプト、新規エンティティ（実体データ）を動的に追加・実装する独立した拡張プラグイン（機能拡張モジュール）です。
+
+当グループが提供するアセットは、外見の変更に留まらず、システム内部の挙動やパラメーターをプログラム側から制御する「技術的な追加モジュール」を指します。導入の際は、前提となるコアシステム（scaddon）のバージョンと環境を正しく構築した上で、各種ツールをご活用ください。
+
+開発コードや最新のツールセットに関するディスカッション、バグ報告等は、上部のオフィシャル・コミュニケーションチャンネル（Discord）にて受け付けております。`}
+        </div>
+      </div>
     </div>
-  );
+  )
 }
