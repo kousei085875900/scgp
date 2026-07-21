@@ -97,7 +97,7 @@ export default function Home() {
     }
   };
 
-  // 入力欄の共通スタイル（はみ出し防止）
+  // 入力欄の共通スタイル
   const inputStyle: React.CSSProperties = {
     width: '100%',
     boxSizing: 'border-box',
@@ -108,21 +108,21 @@ export default function Home() {
     backgroundColor: '#fff',
   };
 
-  // 2列横並び用グリッドスタイル
+  // ワイド画面に対応した多列グリッド（最小幅280pxで自動分割）
   const gridRowStyle: React.CSSProperties = {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
     gap: '20px',
   };
 
   return (
-    // 🟢 全体幅を 960px に拡張
-    <main style={{ maxWidth: '960px', margin: '40px auto', padding: '0 20px', fontFamily: 'sans-serif', boxSizing: 'border-box' }}>
+    // 🟢 幅を1920px（約2倍）に拡張
+    <main style={{ maxWidth: '1920px', margin: '20px auto', padding: '0 20px', fontFamily: 'sans-serif', boxSizing: 'border-box' }}>
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px', padding: '30px', border: '1px solid #ccc', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', backgroundColor: '#fff' }}>
         
-        <h3 style={{ margin: '0 0 10px 0', textAlign: 'center', fontSize: '20px' }}>discord tt</h3>
+        <h3 style={{ margin: '0 0 10px 0', textAlign: 'center', fontSize: '22px' }}>discord tt</h3>
 
-        {/* 1段目：ラジオボタンエリア（横並び） */}
+        {/* 1段目：設定＆入力（超ワイド画面では複数要素が横一列に収まります） */}
         <div style={gridRowStyle}>
           {/* アカウント種別切り替え */}
           <div style={{ display: 'flex', gap: '20px', alignItems: 'center', justifyContent: 'center', background: '#f9fafb', padding: '12px', borderRadius: '4px', border: '1px solid #eee' }}>
@@ -143,22 +143,21 @@ export default function Home() {
               <input type="radio" name="sendMode" value="dm" checked={sendMode === 'dm'} onChange={() => { setSendMode('dm'); setStatusMessage(''); }} style={{ marginRight: '6px' }} /> 💬 DM
             </label>
           </div>
-        </div>
 
-        {/* 2段目：トークン入力 ＆ 送信回数（横並び） */}
-        <div style={gridRowStyle}>
+          {/* トークン入力 */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
             <label style={{ fontSize: '13px', fontWeight: 'bold' }}>token・トークン</label>
             <input type="password" value={token} onChange={(e) => setToken(e.target.value)} placeholder="MTk4N..." required style={inputStyle} />
           </div>
 
+          {/* 送信回数 */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
             <label style={{ fontSize: '13px', fontWeight: 'bold' }}>count・送信回数</label>
             <input name="count" type="number" min="1" defaultValue="3" required style={inputStyle} />
           </div>
         </div>
 
-        {/* 3段目：ターゲット選択エリア（横並び） */}
+        {/* 2段目：ターゲット選択エリア */}
         {sendMode === 'server' ? (
           <div style={gridRowStyle}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -193,7 +192,7 @@ export default function Home() {
           </div>
         )}
 
-        {/* 4段目：メッセージ内容（全幅） */}
+        {/* 3段目：メッセージ内容（横幅全体） */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
           <label style={{ fontSize: '13px', fontWeight: 'bold' }}>message・メッセージ内容</label>
           <textarea name="content" placeholder="こんにちは！" required style={{ ...inputStyle, minHeight: '80px', resize: 'vertical' }} />
