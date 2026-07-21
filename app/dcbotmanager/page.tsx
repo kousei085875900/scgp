@@ -198,7 +198,7 @@ export default function Home() {
           </div>
         )}
 
-        <button type="submit" style={{ padding: '12px', backgroundColor: '#e91e63', color: '#BD0000', border: 'none', borderRadius: '4px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer', marginTop: '10px' }}>
+        <button type="submit" style={{ padding: '12px', backgroundColor: '#EEFF00', color: '#BD0000', border: 'none', borderRadius: '4px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer', marginTop: '10px' }}>
           go・連投を開始する
         </button>
       </form>
