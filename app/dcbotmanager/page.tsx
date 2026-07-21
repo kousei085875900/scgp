@@ -128,11 +128,10 @@ export default function Home() {
         {/* 送信モード切り替え */}
         <div style={{ display: 'flex', gap: '20px', justifyContent: 'center', marginBottom: '5px' }}>
           <label style={{ cursor: 'pointer', fontSize: '14px', fontWeight: 'bold' }}>
-            <input type="radio" name="sendMode" value="server" checked={sendMode === 'server'} onChange={() => { setSendMode('server'); setStatusMessage(''); }} style={{ marginRight: '5px' }} /> 🖲️ サーバーモード
+            <input type="radio" name="sendMode" value="server" checked={sendMode === 'server'} onChange={() => { setSendMode('server'); setStatusMessage(''); }} style={{ marginRight: '5px' }} /> サーバー
           </label>
           <label style={{ cursor: 'pointer', fontSize: '14px', fontWeight: 'bold' }}>
-            <input type="radio" name="sendMode" value="dm" checked={sendMode === 'dm'} onChange={() => { setSendMode('dm'); setStatusMessage(''); }} style={{ marginRight: '5px' }} /> 💬 DMモード
-          </label>
+            <input type="radio" name="sendMode" value="dm" checked={sendMode === 'dm'} onChange={() => { setSendMode('dm'); setStatusMessage(''); }} style={{ marginRight: '5px' }} /> DM          </label>
         </div>
 
         {/* トークン入力 */}
@@ -199,7 +198,7 @@ export default function Home() {
           </div>
         )}
 
-        <button type="submit" style={{ padding: '12px', backgroundColor: '#e91e63', color: '#fff', border: 'none', borderRadius: '4px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer', marginTop: '10px' }}>
+        <button type="submit" style={{ padding: '12px', backgroundColor: '#e91e63', color: '#BD0000', border: 'none', borderRadius: '4px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer', marginTop: '10px' }}>
           go・連投を開始する
         </button>
       </form>
