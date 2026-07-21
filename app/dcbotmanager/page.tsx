@@ -108,84 +108,94 @@ export default function Home() {
     backgroundColor: '#fff',
   };
 
+  // 2列横並び用グリッドスタイル（画面幅に応じて自動調整）
+  const gridRowStyle: React.CSSProperties = {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+    gap: '15px',
+  };
+
   return (
-    // 🟢 <main> タグで全体を囲み、中央寄せ＆幅の制御を行う
-    <main style={{ maxWidth: '420px', margin: '40px auto', padding: '0 15px', fontFamily: 'sans-serif', boxSizing: 'border-box' }}>
+    // 🟢 全体幅を 720px に拡張してスクロール量を削減
+    <main style={{ maxWidth: '720px', margin: '40px auto', padding: '0 20px', fontFamily: 'sans-serif', boxSizing: 'border-box' }}>
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px', padding: '25px', border: '1px solid #ccc', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', backgroundColor: '#fff' }}>
         
         <h3 style={{ margin: '0 0 10px 0', textAlign: 'center' }}>discord tt</h3>
 
-        {/* アカウント種別切り替え */}
-        <div style={{ display: 'flex', gap: '20px', justifyContent: 'center', borderBottom: '1px solid #eee', paddingBottom: '10px' }}>
-          <label style={{ cursor: 'pointer', fontSize: '14px' }}>
-            <input type="radio" name="tokenType" value="bot" checked={tokenType === 'bot'} onChange={() => setTokenType('bot')} style={{ marginRight: '5px' }} /> bot
-          </label>
-          <label style={{ cursor: 'pointer', fontSize: '14px' }}>
-            <input type="radio" name="tokenType" value="user" checked={tokenType === 'user'} onChange={() => setTokenType('user')} style={{ marginRight: '5px' }} /> self・ユーザー
-          </label>
+        {/* 1段目：ラジオボタンエリア（横並び） */}
+        <div style={gridRowStyle}>
+          {/* アカウント種別切り替え */}
+          <div style={{ display: 'flex', gap: '15px', alignItems: 'center', justifyContent: 'center', background: '#f9fafb', padding: '10px', borderRadius: '4px', border: '1px solid #eee' }}>
+            <label style={{ cursor: 'pointer', fontSize: '13px' }}>
+              <input type="radio" name="tokenType" value="bot" checked={tokenType === 'bot'} onChange={() => setTokenType('bot')} style={{ marginRight: '4px' }} /> bot
+            </label>
+            <label style={{ cursor: 'pointer', fontSize: '13px' }}>
+              <input type="radio" name="tokenType" value="user" checked={tokenType === 'user'} onChange={() => setTokenType('user')} style={{ marginRight: '4px' }} /> self・ユーザー
+            </label>
+          </div>
+
+          {/* 送信モード切り替え */}
+          <div style={{ display: 'flex', gap: '15px', alignItems: 'center', justifyContent: 'center', background: '#f9fafb', padding: '10px', borderRadius: '4px', border: '1px solid #eee' }}>
+            <label style={{ cursor: 'pointer', fontSize: '13px', fontWeight: 'bold' }}>
+              <input type="radio" name="sendMode" value="server" checked={sendMode === 'server'} onChange={() => { setSendMode('server'); setStatusMessage(''); }} style={{ marginRight: '4px' }} /> 🖲️ サーバー
+            </label>
+            <label style={{ cursor: 'pointer', fontSize: '13px', fontWeight: 'bold' }}>
+              <input type="radio" name="sendMode" value="dm" checked={sendMode === 'dm'} onChange={() => { setSendMode('dm'); setStatusMessage(''); }} style={{ marginRight: '4px' }} /> 💬 DM
+            </label>
+          </div>
         </div>
 
-        {/* 送信モード切り替え */}
-        <div style={{ display: 'flex', gap: '20px', justifyContent: 'center', marginBottom: '5px' }}>
-          <label style={{ cursor: 'pointer', fontSize: '14px', fontWeight: 'bold' }}>
-            <input type="radio" name="sendMode" value="server" checked={sendMode === 'server'} onChange={() => { setSendMode('server'); setStatusMessage(''); }} style={{ marginRight: '5px' }} /> サーバー
-          </label>
-          <label style={{ cursor: 'pointer', fontSize: '14px', fontWeight: 'bold' }}>
-            <input type="radio" name="sendMode" value="dm" checked={sendMode === 'dm'} onChange={() => { setSendMode('dm'); setStatusMessage(''); }} style={{ marginRight: '5px' }} /> DM          </label>
+        {/* 2段目：トークン入力 ＆ 送信回数（横並び） */}
+        <div style={gridRowStyle}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+            <label style={{ fontSize: '12px', fontWeight: 'bold' }}>token・トークン</label>
+            <input type="password" value={token} onChange={(e) => setToken(e.target.value)} placeholder="MTk4N..." required style={inputStyle} />
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+            <label style={{ fontSize: '12px', fontWeight: 'bold' }}>count・送信回数</label>
+            <input name="count" type="number" min="1" defaultValue="3" required style={inputStyle} />
+          </div>
         </div>
 
-        {/* トークン入力 */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-          <label style={{ fontSize: '12px', fontWeight: 'bold' }}>token・トークン</label>
-          <input type="password" value={token} onChange={(e) => setToken(e.target.value)} placeholder="MTk4N..." required style={inputStyle} />
-        </div>
-
-        {/* サーバー読み込みボタン（サーバーモード時のみ） */}
-        {sendMode === 'server' && (
-          <button type="button" onClick={handleLoadGuilds} style={{ padding: '10px', backgroundColor: '#4f46e5', color: '#fff', border: 'none', borderRadius: '4px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer' }}>
-            Load・一覧を読み込む
-          </button>
-        )}
-
-        {/* モードによる表示分岐 */}
+        {/* 3段目：ターゲット選択エリア（横並び） */}
         {sendMode === 'server' ? (
           <>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-              <label style={{ fontSize: '12px', fontWeight: 'bold' }}>server・サーバー選択</label>
-              <select value={selectedGuild} onChange={(e) => handleGuildChange(e.target.value)} required style={inputStyle}>
-                <option value="">サーバーを選択してください</option>
-                {guilds.map((g) => (
-                  <option key={g.id} value={g.id}>{g.name}</option>
-                ))}
-              </select>
-            </div>
+            <div style={gridRowStyle}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <label style={{ fontSize: '12px', fontWeight: 'bold' }}>server・サーバー選択</label>
+                  <button type="button" onClick={handleLoadGuilds} style={{ padding: '2px 8px', backgroundColor: '#4f46e5', color: '#fff', border: 'none', borderRadius: '3px', fontSize: '11px', cursor: 'pointer' }}>
+                    Load・読み込み
+                  </button>
+                </div>
+                <select value={selectedGuild} onChange={(e) => handleGuildChange(e.target.value)} required style={inputStyle}>
+                  <option value="">サーバーを選択してください</option>
+                  {guilds.map((g) => (
+                    <option key={g.id} value={g.id}>{g.name}</option>
+                  ))}
+                </select>
+              </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-              <label style={{ fontSize: '12px', fontWeight: 'bold' }}>channel・チャンネル選択</label>
-              <select name="channelId" required style={inputStyle}>
-                <option value="">チャンネルを選択してください</option>
-                {channels.map((c) => (
-                  <option key={c.id} value={c.id}>#{c.name}</option>
-                ))}
-              </select>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                <label style={{ fontSize: '12px', fontWeight: 'bold' }}>channel・チャンネル選択</label>
+                <select name="channelId" required style={inputStyle}>
+                  <option value="">チャンネルを選択してください</option>
+                  {channels.map((c) => (
+                    <option key={c.id} value={c.id}>#{c.name}</option>
+                  ))}
+                </select>
+              </div>
             </div>
           </>
         ) : (
-          <>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-              <label style={{ fontSize: '12px', fontWeight: 'bold' }}>recipient user id・送信先ユーザーID</label>
-              <input name="userId" type="text" placeholder="123456789012345678" required style={inputStyle} />
-            </div>
-          </>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+            <label style={{ fontSize: '12px', fontWeight: 'bold' }}>recipient user id・送信先ユーザーID</label>
+            <input name="userId" type="text" placeholder="123456789012345678" required style={inputStyle} />
+          </div>
         )}
 
-        {/* 送信回数 */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-          <label style={{ fontSize: '12px', fontWeight: 'bold' }}>count・送信回数</label>
-          <input name="count" type="number" min="1" defaultValue="3" required style={inputStyle} />
-        </div>
-
-        {/* メッセージ内容 */}
+        {/* 4段目：メッセージ内容（全幅） */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
           <label style={{ fontSize: '12px', fontWeight: 'bold' }}>message・メッセージ内容</label>
           <textarea name="content" placeholder="こんにちは！" required style={{ ...inputStyle, minHeight: '60px', resize: 'vertical' }} />
@@ -198,7 +208,8 @@ export default function Home() {
           </div>
         )}
 
-        <button type="submit" style={{ padding: '12px', backgroundColor: '#EEFF00', color: '#BD0000', border: 'none', borderRadius: '4px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer', marginTop: '10px' }}>
+        {/* 実行ボタン */}
+        <button type="submit" style={{ padding: '12px', backgroundColor: '#e91e63', color: '#fff', border: 'none', borderRadius: '4px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer', marginTop: '5px' }}>
           go・連投を開始する
         </button>
       </form>
