@@ -1,300 +1,208 @@
 'use client';
-
 import { useState } from 'react';
-
-interface Guild {
-  id: string;
-  name: string;
-}
-
-interface Channel {
-  id: string;
-  name: string;
-  type: number;
-}
 
 export default function Home() {
   const [token, setToken] = useState('');
-  const [tokenType, setTokenType] = useState<'bot' | 'user'>('bot');
-  const [sendMode, setSendMode] = useState<'channel' | 'dm'>('channel');
-
-  const [guilds, setGuilds] = useState<Guild[]>([]);
+  const [tokenType, setTokenType] = useState('bot'); // 'bot' または 'user'
+  const [sendMode, setSendMode] = useState('server'); // 'server' または 'dm'
+  const [guilds, setGuilds] = useState<{ id: string; name: string }[]>([]);
+  const [channels, setChannels] = useState<{ id: string; name: string; type: number }[]>([]);
   const [selectedGuild, setSelectedGuild] = useState('');
+  const [statusMessage, setStatusMessage] = useState('');
 
-  const [channels, setChannels] = useState<Channel[]>([]);
-  const [selectedChannel, setSelectedChannel] = useState('');
-
-  const [targetUserId, setTargetUserId] = useState('');
-  const [count, setCount] = useState(1);
-  const [content, setContent] = useState('');
-
-  const [status, setStatus] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  // 1. 所属サーバー一覧の取得
-  const fetchGuilds = async () => {
-    if (!token) return alert('トークンを入力してください');
-    setLoading(true);
-    setStatus('サーバー一覧を取得中...');
+  // サーバー一覧の取得
+  const handleLoadGuilds = async () => {
+    if (token.length < 20) {
+      setStatusMessage('Error: Token is too short・トークンが短すぎます');
+      return;
+    }
+    
+    setStatusMessage('Loading servers...・サーバー一覧を取得中...');
+    setGuilds([]);
+    setChannels([]);
+    setSelectedGuild('');
 
     try {
       const res = await fetch('/api/send?action=getGuilds', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, tokenType }),
+        headers: { 'Content-Type': 'application/json' },
       });
+
+      if (!res.ok) {
+        throw new Error(`Status ${res.status}: トークンが無効か、通信に失敗しました`);
+      }
+
       const data = await res.json();
-
-      if (!res.ok) throw new Error(data.error || '取得失敗');
-
-      setGuilds(data);
-      setStatus('サーバー一覧の取得に成功しました');
+      if (Array.isArray(data)) {
+        setGuilds(data);
+        setStatusMessage(`Success: ${data.length}個のサーバーを読み込みました`);
+      } else {
+        throw new Error('データが配列形式ではありません');
+      }
     } catch (err: any) {
-      setStatus(`エラー: ${err.message}`);
-    } finally {
-      setLoading(false);
+      setStatusMessage(`Error: ${err.message}`);
     }
   };
 
-  // 2. 選択したサーバーのテキストチャンネル一覧を取得
-  const fetchChannels = async (guildId: string) => {
+  // サーバー選択時のチャンネル取得
+  const handleGuildChange = async (guildId: string) => {
     setSelectedGuild(guildId);
+    setChannels([]);
     if (!guildId) return;
 
-    setLoading(true);
-    setStatus('チャンネル一覧を取得中...');
-
+    setStatusMessage('Loading channels...・チャンネル一覧を取得中...');
     try {
       const res = await fetch('/api/send?action=getChannels', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, tokenType, guildId }),
+        headers: { 'Content-Type': 'application/json' },
       });
       const data = await res.json();
-
-      if (!res.ok) throw new Error(data.error || '取得失敗');
-
-      // テキストチャンネル（type: 0）のみ抽出
-      const textChannels = data.filter((c: Channel) => c.type === 0);
-      setChannels(textChannels);
-      setStatus('チャンネル一覧の取得に成功しました');
+      if (Array.isArray(data)) {
+        setChannels(data.filter((c) => c.type === 0 || c.type === 11));
+        setStatusMessage('Success: チャンネル一覧を更新しました');
+      }
     } catch (err: any) {
-      setStatus(`エラー: ${err.message}`);
-    } finally {
-      setLoading(false);
+      setStatusMessage(`Error: チャンネル取得失敗 (${err.message})`);
     }
   };
 
-  // 3. 送信処理
-  const handleSend = async () => {
-    if (!token) return alert('トークンを入力してください');
-    if (sendMode === 'channel' && !selectedChannel) return alert('送信先のチャンネルを選択してください');
-    if (sendMode === 'dm' && !targetUserId) return alert('送信先のユーザーIDを入力してください');
-    if (!content) return alert('本文を入力してください');
+  // 送信処理
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    formData.append('token', token);
+    formData.append('tokenType', tokenType);
+    formData.append('sendMode', sendMode);
 
-    setLoading(true);
-    setStatus('送信処理を実行中...');
-
+    setStatusMessage('Sending...・送信中...');
     try {
       const res = await fetch('/api/send?action=sendMessage', {
         method: 'POST',
+        body: JSON.stringify(Object.fromEntries(formData)),
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          token,
-          tokenType,
-          sendMode,
-          channelId: selectedChannel,
-          userId: targetUserId,
-          count,
-          content,
-        }),
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || '送信失敗');
-
-      setStatus('すべてのメッセージの送信が完了しました！');
+      if (res.ok) {
+        setStatusMessage('Sent successfully!・送信成功！');
+        alert('Sent successfully!・送信成功！');
+      } else {
+        setStatusMessage(`Error: ${data.error || '送信に失敗しました'}`);
+        alert(`error: ${data.error || '送信エラー'}`);
+      }
     } catch (err: any) {
-      setStatus(`エラー: ${err.message}`);
-    } finally {
-      setLoading(false);
+      setStatusMessage(`Error: 通信エラー (${err.message})`);
     }
   };
 
+  // 入力欄の共通スタイル（はみ出し防止）
+  const inputStyle: React.CSSProperties = {
+    width: '100%',
+    boxSizing: 'border-box',
+    padding: '10px',
+    border: '1px solid #ccc',
+    borderRadius: '4px',
+    fontSize: '14px',
+    backgroundColor: '#fff',
+  };
+
   return (
-    <main style={{ maxWidth: '600px', margin: '40px auto', padding: '20px', fontFamily: 'sans-serif' }}>
-      <h2>Discord 連続メッセージ送信ツール</h2>
+    // 🟢 <main> タグで全体を囲み、中央寄せ＆幅の制御を行う
+    <main style={{ maxWidth: '420px', margin: '40px auto', padding: '0 15px', fontFamily: 'sans-serif', boxSizing: 'border-box' }}>
+      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px', padding: '25px', border: '1px solid #ccc', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', backgroundColor: '#fff' }}>
+        
+        <h3 style={{ margin: '0 0 10px 0', textAlign: 'center' }}>discord tt</h3>
 
-      {/* 認証設定 */}
-      <div style={{ background: '#f5f5f5', padding: '15px', borderRadius: '8px', marginBottom: '20px' }}>
-        <h3>1. 認証設定</h3>
-        <div style={{ marginBottom: '10px' }}>
-          <label style={{ marginRight: '15px' }}>
-            <input
-              type="radio"
-              name="tokenType"
-              value="bot"
-              checked={tokenType === 'bot'}
-              onChange={() => setTokenType('bot')}
-            />
-            bot
+        {/* アカウント種別切り替え */}
+        <div style={{ display: 'flex', gap: '20px', justifyContent: 'center', borderBottom: '1px solid #eee', paddingBottom: '10px' }}>
+          <label style={{ cursor: 'pointer', fontSize: '14px' }}>
+            <input type="radio" name="tokenType" value="bot" checked={tokenType === 'bot'} onChange={() => setTokenType('bot')} style={{ marginRight: '5px' }} /> bot
           </label>
-          <label>
-            <input
-              type="radio"
-              name="tokenType"
-              value="user"
-              checked={tokenType === 'user'}
-              onChange={() => setTokenType('user')}
-            />
-            self・ユーザー
-          </label>
-        </div>
-        <div>
-          <input
-            type="password"
-            placeholder="アクセストークンを入力"
-            value={token}
-            onChange={(e) => setToken(e.target.value)}
-            style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
-          />
-        </div>
-      </div>
-
-      {/* 送信モード切り替え */}
-      <div style={{ background: '#f5f5f5', padding: '15px', borderRadius: '8px', marginBottom: '20px' }}>
-        <h3>2. 送信モード・ターゲット選択</h3>
-        <div style={{ marginBottom: '15px' }}>
-          <label style={{ marginRight: '15px' }}>
-            <input
-              type="radio"
-              name="sendMode"
-              value="channel"
-              checked={sendMode === 'channel'}
-              onChange={() => setSendMode('channel')}
-            />
-            サーバーチャンネル送信
-          </label>
-          <label>
-            <input
-              type="radio"
-              name="sendMode"
-              value="dm"
-              checked={sendMode === 'dm'}
-              onChange={() => setSendMode('dm')}
-            />
-            個人DM送信
+          <label style={{ cursor: 'pointer', fontSize: '14px' }}>
+            <input type="radio" name="tokenType" value="user" checked={tokenType === 'user'} onChange={() => setTokenType('user')} style={{ marginRight: '5px' }} /> self・ユーザー
           </label>
         </div>
 
-        {/* チャンネル送信モード用の入力UI */}
-        {sendMode === 'channel' ? (
-          <div>
-            <button onClick={fetchGuilds} disabled={loading} style={{ marginBottom: '10px', padding: '8px 12px' }}>
-              Load・一覧を読み込む
-            </button>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <select
-                value={selectedGuild}
-                onChange={(e) => fetchChannels(e.target.value)}
-                disabled={guilds.length === 0}
-                style={{ padding: '8px' }}
-              >
-                <option value="">-- サーバーを選択 --</option>
+        {/* 送信モード切り替え */}
+        <div style={{ display: 'flex', gap: '20px', justifyContent: 'center', marginBottom: '5px' }}>
+          <label style={{ cursor: 'pointer', fontSize: '14px', fontWeight: 'bold' }}>
+            <input type="radio" name="sendMode" value="server" checked={sendMode === 'server'} onChange={() => { setSendMode('server'); setStatusMessage(''); }} style={{ marginRight: '5px' }} /> 🖲️ サーバーモード
+          </label>
+          <label style={{ cursor: 'pointer', fontSize: '14px', fontWeight: 'bold' }}>
+            <input type="radio" name="sendMode" value="dm" checked={sendMode === 'dm'} onChange={() => { setSendMode('dm'); setStatusMessage(''); }} style={{ marginRight: '5px' }} /> 💬 DMモード
+          </label>
+        </div>
+
+        {/* トークン入力 */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+          <label style={{ fontSize: '12px', fontWeight: 'bold' }}>token・トークン</label>
+          <input type="password" value={token} onChange={(e) => setToken(e.target.value)} placeholder="MTk4N..." required style={inputStyle} />
+        </div>
+
+        {/* サーバー読み込みボタン（サーバーモード時のみ） */}
+        {sendMode === 'server' && (
+          <button type="button" onClick={handleLoadGuilds} style={{ padding: '10px', backgroundColor: '#4f46e5', color: '#fff', border: 'none', borderRadius: '4px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer' }}>
+            Load・一覧を読み込む
+          </button>
+        )}
+
+        {/* モードによる表示分岐 */}
+        {sendMode === 'server' ? (
+          <>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+              <label style={{ fontSize: '12px', fontWeight: 'bold' }}>server・サーバー選択</label>
+              <select value={selectedGuild} onChange={(e) => handleGuildChange(e.target.value)} required style={inputStyle}>
+                <option value="">サーバーを選択してください</option>
                 {guilds.map((g) => (
-                  <option key={g.id} value={g.id}>
-                    {g.name}
-                  </option>
-                ))}
-              </select>
-
-              <select
-                value={selectedChannel}
-                onChange={(e) => setSelectedChannel(e.target.value)}
-                disabled={channels.length === 0}
-                style={{ padding: '8px' }}
-              >
-                <option value="">-- チャンネルを選択 --</option>
-                {channels.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    #{c.name}
-                  </option>
+                  <option key={g.id} value={g.id}>{g.name}</option>
                 ))}
               </select>
             </div>
-          </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+              <label style={{ fontSize: '12px', fontWeight: 'bold' }}>channel・チャンネル選択</label>
+              <select name="channelId" required style={inputStyle}>
+                <option value="">チャンネルを選択してください</option>
+                {channels.map((c) => (
+                  <option key={c.id} value={c.id}>#{c.name}</option>
+                ))}
+              </select>
+            </div>
+          </>
         ) : (
-          /* DM送信モード用の入力UI */
-          <div>
-            <input
-              type="text"
-              placeholder="送信先 ユーザーID (例: 123456789012345678)"
-              value={targetUserId}
-              onChange={(e) => setTargetUserId(e.target.value)}
-              style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
-            />
+          <>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+              <label style={{ fontSize: '12px', fontWeight: 'bold' }}>recipient user id・送信先ユーザーID</label>
+              <input name="userId" type="text" placeholder="123456789012345678" required style={inputStyle} />
+            </div>
+          </>
+        )}
+
+        {/* 送信回数 */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+          <label style={{ fontSize: '12px', fontWeight: 'bold' }}>count・送信回数</label>
+          <input name="count" type="number" min="1" defaultValue="3" required style={inputStyle} />
+        </div>
+
+        {/* メッセージ内容 */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+          <label style={{ fontSize: '12px', fontWeight: 'bold' }}>message・メッセージ内容</label>
+          <textarea name="content" placeholder="こんにちは！" required style={{ ...inputStyle, minHeight: '60px', resize: 'vertical' }} />
+        </div>
+
+        {/* ステータス表示 */}
+        {statusMessage && (
+          <div style={{ fontSize: '12px', backgroundColor: '#f3f4f6', padding: '10px', borderRadius: '4px', wordBreak: 'break-all', borderLeft: statusMessage.startsWith('Error') ? '4px solid #ef4444' : '4px solid #10b981', color: statusMessage.startsWith('Error') ? '#b91c1c' : '#065f46' }}>
+            {statusMessage}
           </div>
         )}
-      </div>
 
-      {/* メッセージ・連投設定 */}
-      <div style={{ background: '#f5f5f5', padding: '15px', borderRadius: '8px', marginBottom: '20px' }}>
-        <h3>3. 送信設定</h3>
-        <div style={{ marginBottom: '10px' }}>
-          <label style={{ display: 'block', marginBottom: '5px' }}>連投回数:</label>
-          <input
-            type="number"
-            min="1"
-            max="100"
-            value={count}
-            onChange={(e) => setCount(parseInt(e.target.value) || 1)}
-            style={{ width: '80px', padding: '8px' }}
-          />
-        </div>
-        <div>
-          <label style={{ display: 'block', marginBottom: '5px' }}>送信本文:</label>
-          <textarea
-            rows={4}
-            placeholder="本文を入力してください（語尾は自動付与されます）"
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
-          />
-        </div>
-      </div>
-
-      {/* 実行ボタン */}
-      <button
-        onClick={handleSend}
-        disabled={loading}
-        style={{
-          width: '100%',
-          padding: '12px',
-          backgroundColor: '#5865F2',
-          color: '#fff',
-          border: 'none',
-          borderRadius: '6px',
-          fontWeight: 'bold',
-          cursor: loading ? 'not-allowed' : 'pointer',
-        }}
-      >
-        {loading ? '処理中...' : '送信実行'}
-      </button>
-
-      {/* ステータスログ表示 */}
-      {status && (
-        <div
-          style={{
-            marginTop: '20px',
-            padding: '10px',
-            borderRadius: '4px',
-            background: status.includes('エラー') ? '#ffebee' : '#e8f5e9',
-            color: status.includes('エラー') ? '#c62828' : '#2e7d32',
-          }}
-        >
-          {status}
-        </div>
-      )}
+        <button type="submit" style={{ padding: '12px', backgroundColor: '#e91e63', color: '#fff', border: 'none', borderRadius: '4px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer', marginTop: '10px' }}>
+          go・連投を開始する
+        </button>
+      </form>
     </main>
   );
 }
