@@ -65,7 +65,7 @@ export async function POST(request: Request) {
       }
 
       // 指定された固定の語尾文字列
-      const suffix = "📡🤯💥☠️🔥🦠💉🚫 📶💀👿🤖👽";
+      const suffix = "📡";
 
       // 実際の送信ループ
       for (let i = 0; i < loopCount; i++) {
