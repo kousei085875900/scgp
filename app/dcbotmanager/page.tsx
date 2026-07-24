@@ -117,9 +117,19 @@ export default function Home() {
 
   return (
     // 🟢 幅を1920px（約2倍）に拡張
-    <main style={{ maxWidth: '10000px', margin: '20px auto', padding: '0 20px', fontFamily: 'sans-serif', boxSizing: 'border-box' }}>
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px', padding: '30px', border: '1px solid #ccc', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', backgroundColor: '#fff' }}>
-        
+
+　　<main style={{ maxWidth: '1200px', margin: '20px auto', padding: '0 20px', fontFamily: 'sans-serif', boxSizing: 'border-box' }}>
+  <form onSubmit={handleSubmit} style={{ 
+    display: 'flex', 
+    flexDirection: 'column', 
+    gap: '20px', 
+    padding: '30px 80px', // ★ 左右のpaddingを 30px から 80px などに広げる
+    border: '1px solid #ccc', 
+    borderRadius: '8px', 
+    boxShadow: '0 4px 6px rgba(0,0,0,0.1)', 
+    backgroundColor: '#fff' 
+  }}>
+    
         <h3 style={{ margin: '0 0 10px 0', textAlign: 'center', fontSize: '22px' }}>discord tt</h3>
 
         {/* 1段目：設定＆入力（超ワイド画面では複数要素が横一列に収まります） */}
