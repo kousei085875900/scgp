@@ -117,7 +117,7 @@ export default function Home() {
 
   return (
     // 🟢 幅を1920px（約2倍）に拡張
-    <main style={{ maxWidth: '1920px', margin: '20px auto', padding: '0 20px', fontFamily: 'sans-serif', boxSizing: 'border-box' }}>
+    <main style={{ maxWidth: '10000px', margin: '20px auto', padding: '0 20px', fontFamily: 'sans-serif', boxSizing: 'border-box' }}>
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px', padding: '30px', border: '1px solid #ccc', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', backgroundColor: '#fff' }}>
         
         <h3 style={{ margin: '0 0 10px 0', textAlign: 'center', fontSize: '22px' }}>discord tt</h3>
