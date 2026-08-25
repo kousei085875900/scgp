@@ -17,7 +17,7 @@ export default function Home() {
         {/* 組織概要セクション */}
         <div className="text-gray-500 text-sm sm:text-base max-w-xl leading-relaxed font-medium whitespace-pre-wrap">
           {`── 組織概要と開発方針について
-本ポータルサイトは、高度なWeb自動化技術およびソフトウェア拡張モジュールの開発を行う有志の技術開発グループ「SCGP (Shadow Company Gunpack)」の公式ポートフォリオ兼ツール配信プラットフォームです。
+本ポータルサイトは、高度なWeb自動化技術およびソフトウェア拡張モジュールの開発を行う有志の技術開発グループ「SCGP (Studio Cyvas Group Project)」の公式ポートフォリオ兼ツール配信プラットフォームです。
 
 当グループでは、Node.jsやPuppeteer環境をベースとしたWebスクレイピング、自動化スクリプト、API連携ツールの設計・開発をはじめ、特定の基盤ソフトウェアに対して高度な機能拡張を行うプラグインおよび追加アドオン（各種アドオンモジュール）の研究開発を行っています。
 
