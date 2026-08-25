@@ -8,7 +8,7 @@ pは、まぁ、普通のテキストですね。
 className=でテキストの色の変更や、下に横線を入れることができる
 <p className="text-red-600">で色を赤にできる、また、カラーコードで細かく色を決めることも可能
        
-<p className="hover:underline">で下に横線がつけれる
+<p className="hover:underline">でカーソルを合わせたときのみ下に横線がつけれる
 
 あわせて書くとこんな感じ<p className="text-red-600 hover:underline">
 */}
