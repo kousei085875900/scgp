@@ -28,7 +28,7 @@ className=でテキストの色の変更や、下に横線を入れることが�
 
             
       {/*リンク移動ボタン------------------------------------*/}
-      　<a href="https://キチガイ.com" target="_blank" rel="noopener noreferrer"className=text-blue-500 hover:underline>
+      　<a href="https://キチガイ.com" target="_blank" rel="noopener noreferrer"className="text-blue-500 hover:underline">
   　　　　どっかに行くボタン
 　　　　</a>
       {/*----------------------------------------------------*/}
