@@ -3,8 +3,15 @@ export default function Home() {
     <main className="p-8">
 {/*【注意！！！！！】文字を表示させるとき最初にh1やらpなどが書かれているが
 h1はサイトバーに表示させる見出しみたいなもので、一つのスクリプト上で一回しか使えない。
-pは、まぁ、普通のテキストですね
-他にもdivがあるがこれは初期スタイルを上書きし、指定された動作以外はしない*/}
+pは、まぁ、普通のテキストですね。
+他にもdivがあるがこれは初期スタイルを上書きし、指定された動作以外はしない。
+className=でテキストの色の変更や、下に横線を入れることができる
+<p className="text-red-600">で色を赤にできる、また、カラーコードで細かく色を決めることも可能
+       
+<p className="hover:underline">で下に横線がつけれる
+
+あわせて書くとこんな感じ<p className="text-red-600 hover:underline">
+*/}
 
       {/*見出し↓-------------------------------------------*/}
       <h1 className="text-2xl font-bold mb-4">
@@ -21,7 +28,7 @@ pは、まぁ、普通のテキストですね
 
             
       {/*リンク移動ボタン------------------------------------*/}
-      　<a href="https://キチガイ.com" target="_blank" rel="noopener noreferrer">
+      　<a href="https://キチガイ.com" target="_blank" rel="noopener noreferrer"className=text-blue-500 hover:underline>
   　　　　どっかに行くボタン
 　　　　</a>
       {/*----------------------------------------------------*/}
