@@ -19,15 +19,12 @@ pは、まぁ、普通のテキストですね
       {/*----------------------------------------------------*/}
 
 
-            <Link href="/DevelopmentProgress" className="p-2 rounded hover:bg-red-500 transition text-sm">DevelopmentProgress</Link>
-            <Link href="/test" className="p-2 rounded hover:bg-red-500 transition text-sm">test</Link>
             
-            <div className="text-xs font-bold text-red-300 uppercase tracking-wider mb-2">tools</div>
-            <Link href="/deptest" className="p-2 rounded hover:bg-red-500 transition text-sm">InMemory deployment tool</Link>
-            <Link href="/dcbotmanager" className="p-2 rounded hover:bg-red-500 transition text-sm">discord bot manager</Link>
-          
-
-      
+      {/*リンク移動ボタン------------------------------------*/}
+      　<a href="https://キチガイ.com" target="_blank" rel="noopener noreferrer">
+  　　　　どっかに行くボタン
+　　　　</a>
+      {/*----------------------------------------------------*/}
     </main>
   );
 }
