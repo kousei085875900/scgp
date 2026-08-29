@@ -105,7 +105,7 @@ export default function Home() {
     border: '1px solid #ccc',
     borderRadius: '4px',
     fontSize: '14px',
-    backgroundColor: '#fff',
+    
   };
 
   // ワイド画面に対応した多列グリッド（最小幅280pxで自動分割）
