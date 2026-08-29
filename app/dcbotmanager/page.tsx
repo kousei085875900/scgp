@@ -127,7 +127,7 @@ export default function Home() {
     border: '1px solid #ccc', 
     borderRadius: '8px', 
     boxShadow: '0 4px 6px rgba(0,0,0,0.1)', 
-    backgroundColor: '#fff' 
+    
   }}>
     
         <h3 style={{ margin: '0 0 10px 0', textAlign: 'center', fontSize: '22px' }}>discord tt</h3>
