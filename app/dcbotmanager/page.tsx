@@ -105,6 +105,7 @@ export default function Home() {
     border: '1px solid #ccc',
     borderRadius: '4px',
     fontSize: '14px',
+    backgroundColor: '#949494,
   
     
     
@@ -115,7 +116,7 @@ export default function Home() {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
     gap: '20px',
-    backgroundColor: '#949494,
+    
     
   };
 
