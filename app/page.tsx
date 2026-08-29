@@ -15,7 +15,7 @@ export default function Home() {
         </h1>
 
         {/* 組織概要セクション */}
-        <div className="text-gray-500 text-sm sm:text-base max-w-xl leading-relaxed font-medium whitespace-pre-wrap">
+        <div className=" text-sm sm:text-base max-w-xl leading-relaxed font-medium whitespace-pre-wrap">
           {`── 組織概要と開発方針について
 本ポータルサイトは、高度なWeb自動化技術およびソフトウェア拡張モジュールの開発を行う有志の技術開発グループ「SCGP (Studio Cyvas Group Project)」の公式ポートフォリオ兼ツール配信プラットフォームです。
 
@@ -27,7 +27,7 @@ export default function Home() {
         <hr className="border-gray-200 my-6" />
 
         {/* 重要なお知らせセクション */}
-        <div className="text-gray-500 text-sm sm:text-base max-w-xl leading-relaxed font-medium whitespace-pre-wrap">
+        <div className=" text-sm sm:text-base max-w-xl leading-relaxed font-medium whitespace-pre-wrap">
           {`【重要なお知らせ】開発アセットの定義と分類について
 現在、当グループが開発・配備している拡張モジュール「ガンパック（Gun-Pack：銃機シミュレーション/動作スクリプト内包型アドオン）」の仕様について、一部のユーザー間で「単なる外見を変更するだけのスキンパック（テクスチャ変更アセット）」との混同が見受けられます。トラブル防止のため、以下の通り定義を明確化いたします。
 
