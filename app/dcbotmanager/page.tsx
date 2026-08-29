@@ -105,7 +105,7 @@ export default function Home() {
     border: '1px solid #ccc',
     borderRadius: '4px',
     fontSize: '14px',
-    background: '#949494',
+    backgroundColor: '#949494',
     
   };
 
