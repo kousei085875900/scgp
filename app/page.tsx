@@ -10,7 +10,7 @@ export default function Home() {
         </div>
         
         {/* メインタイトル */}
-        <h1 className="text-4xl sm:text-6xl font-black text-gray-950 tracking-tight leading-tight">
+        <h1 className="text-4xl sm:text-6xl font-black text-red-600 tracking-tight leading-tight">
           SCGP<br />
         </h1>
 
