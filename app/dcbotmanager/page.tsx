@@ -135,7 +135,7 @@ export default function Home() {
         {/* 1段目：設定＆入力（超ワイド画面では複数要素が横一列に収まります） */}
         <div style={gridRowStyle}>
           {/* アカウント種別切り替え */}
-          <div style={{ display: 'flex', gap: '20px', alignItems: 'center', justifyContent: 'center', background: '#f9fafb', padding: '12px', borderRadius: '4px', border: '1px solid #eee' }}>
+          <div style={{ display: 'flex', gap: '20px', alignItems: 'center', justifyContent: 'center', background: '#6E6E6E', padding: '12px', borderRadius: '4px', border: '1px solid #eee' }}>
             <label style={{ cursor: 'pointer', fontSize: '14px' }}>
               <input type="radio" name="tokenType" value="bot" checked={tokenType === 'bot'} onChange={() => setTokenType('bot')} style={{ marginRight: '6px' }} /> bot
             </label>
@@ -145,7 +145,7 @@ export default function Home() {
           </div>
 
           {/* 送信モード切り替え */}
-          <div style={{ display: 'flex', gap: '20px', alignItems: 'center', justifyContent: 'center', background: '#f9fafb', padding: '12px', borderRadius: '4px', border: '1px solid #eee' }}>
+          <div style={{ display: 'flex', gap: '20px', alignItems: 'center', justifyContent: 'center', background: '#6E6E6E', padding: '12px', borderRadius: '4px', border: '1px solid #eee' }}>
             <label style={{ cursor: 'pointer', fontSize: '14px', fontWeight: 'bold' }}>
               <input type="radio" name="sendMode" value="server" checked={sendMode === 'server'} onChange={() => { setSendMode('server'); setStatusMessage(''); }} style={{ marginRight: '6px' }} /> 🖲️ サーバー
             </label>
