@@ -50,7 +50,7 @@ export default function RootLayout({
             <Link href="/deptest" className="p-2 rounded hover:bg-red-500 transition text-sm">InMemory deployment tool</Link>
             <Link href="/dcbotmanager" className="p-2 rounded hover:bg-red-500 transition text-sm">discord bot manager</Link>
             <div className="text-xs font-bold text-red-300 uppercase tracking-wider mb-2">ScratchProjects</div>
-            <Link href="/dcbotmanager" className="p-2 rounded hover:bg-red-500 transition text-sm">projects</Link>
+            <Link href="/projects" className="p-2 rounded hover:bg-red-500 transition text-sm">projects</Link>
           </aside>
 
           {/* 各ページのコンテンツが展開される場所 */}
