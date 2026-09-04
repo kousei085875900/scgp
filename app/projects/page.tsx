@@ -12,7 +12,9 @@ export default function Home() {
       </h1>
      
       
-      
+      <Link href="/projects/allport" className="text-blue-500 hover:underline">
+        allport project
+      </Link>
       
          
       
