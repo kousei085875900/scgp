@@ -8,7 +8,7 @@ export default function Home() {
         scratch projects
       </h1>
      
-      <Link href="/allport" className="p-2 rounded hover:bg-red-500 transition text-sm">
+      <Link href="/allport"className="text-blue-500 hover:underline">
         AllPort project
       </Link>
       
