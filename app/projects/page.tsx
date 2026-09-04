@@ -11,7 +11,7 @@ export default function Home() {
       </h1>
      
       <Link href="/allport" className="text-blue-500 hover:underline">
-        AllPort project
+        The goal of this project is to port various games to Scratch as faithfully as possible.
       </Link>
       
       
