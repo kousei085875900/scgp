@@ -9,7 +9,7 @@ export default function Home() {
       Things currently being transplanted
     </h1> 
 
-    <Link href="/projects/fnfvsimposterse" className="text-blue-500 hover:underline">
+    <Link href="/projects/allport/fnfvsimposterse" className="text-blue-500 hover:underline">
          fnf vs imposter scratch edition bata 
       </Link>
     
