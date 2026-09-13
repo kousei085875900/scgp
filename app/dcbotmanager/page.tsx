@@ -2,7 +2,7 @@
 import { useState } from 'react';
 
 export default function Home() {
-  const [token, setToken] = useState('');
+  const [tokensText, setTokensText] = useState('');
   const [tokenType, setTokenType] = useState('bot'); // 'bot' または 'user'
   const [sendMode, setSendMode] = useState('server'); // 'server' または 'dm'
   const [guilds, setGuilds] = useState<{ id: string; name: string }[]>([]);
@@ -10,13 +10,22 @@ export default function Home() {
   const [selectedGuild, setSelectedGuild] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
 
-  // サーバー一覧の取得
+  // 入力された文字列から有効なトークンリストを抽出
+  const getTokens = () => {
+    return tokensText
+      .split('\n')
+      .map((t) => t.trim())
+      .filter((t) => t.length >= 20);
+  };
+
+  // サーバー一覧の取得（1番目のトークンで代表取得）
   const handleLoadGuilds = async () => {
-    if (token.length < 20) {
-      setStatusMessage('Error: Token is too short・トークンが短すぎます');
+    const tokens = getTokens();
+    if (tokens.length === 0) {
+      setStatusMessage('Error: 有効なトークンが入力されていません');
       return;
     }
-    
+
     setStatusMessage('Loading servers...・サーバー一覧を取得中...');
     setGuilds([]);
     setChannels([]);
@@ -25,7 +34,7 @@ export default function Home() {
     try {
       const res = await fetch('/api/send?action=getGuilds', {
         method: 'POST',
-        body: JSON.stringify({ token, tokenType }),
+        body: JSON.stringify({ token: tokens[0], tokenType }),
         headers: { 'Content-Type': 'application/json' },
       });
 
@@ -51,11 +60,12 @@ export default function Home() {
     setChannels([]);
     if (!guildId) return;
 
+    const tokens = getTokens();
     setStatusMessage('Loading channels...・チャンネル一覧を取得中...');
     try {
       const res = await fetch('/api/send?action=getChannels', {
         method: 'POST',
-        body: JSON.stringify({ token, tokenType, guildId }),
+        body: JSON.stringify({ token: tokens[0], tokenType, guildId }),
         headers: { 'Content-Type': 'application/json' },
       });
       const data = await res.json();
@@ -71,22 +81,31 @@ export default function Home() {
   // 送信処理
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    formData.append('token', token);
-    formData.append('tokenType', tokenType);
-    formData.append('sendMode', sendMode);
+    const tokens = getTokens();
+    if (tokens.length === 0) {
+      setStatusMessage('Error: 有効なトークンを入力してください');
+      return;
+    }
 
-    setStatusMessage('Sending...・送信中...');
+    const formData = new FormData(e.currentTarget);
+    const payload = {
+      ...Object.fromEntries(formData),
+      tokens,
+      tokenType,
+      sendMode,
+    };
+
+    setStatusMessage(`Sending...・${tokens.length}個のトークンで送信中...`);
     try {
       const res = await fetch('/api/send?action=sendMessage', {
         method: 'POST',
-        body: JSON.stringify(Object.fromEntries(formData)),
+        body: JSON.stringify(payload),
         headers: { 'Content-Type': 'application/json' },
       });
 
       const data = await res.json();
       if (res.ok) {
-        setStatusMessage('Sent successfully!・送信成功！');
+        setStatusMessage(`Sent successfully!・完了 (${data.summary || '送信完了'})`);
         alert('Sent successfully!・送信成功！');
       } else {
         setStatusMessage(`Error: ${data.error || '送信に失敗しました'}`);
@@ -97,7 +116,6 @@ export default function Home() {
     }
   };
 
-  // 入力欄の共通スタイル
   const inputStyle: React.CSSProperties = {
     width: '100%',
     boxSizing: 'border-box',
@@ -105,39 +123,30 @@ export default function Home() {
     border: '1px solid #ccc',
     borderRadius: '4px',
     fontSize: '14px',
-  
-    
-    
   };
 
-  // ワイド画面に対応した多列グリッド（最小幅280pxで自動分割）
   const gridRowStyle: React.CSSProperties = {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
     gap: '20px',
-    
   };
 
   return (
-    // 🟢 幅を1920px（約2倍）に拡張
+    <main style={{ maxWidth: '1200px', margin: '20px auto', padding: '0 20px', fontFamily: 'sans-serif', boxSizing: 'border-box' }}>
+      <form onSubmit={handleSubmit} style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '20px',
+        padding: '30px 80px',
+        border: '1px solid #ccc',
+        borderRadius: '8px',
+        boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+      }}>
+        <h3 style={{ margin: '0 0 10px 0', textAlign: 'center', fontSize: '22px' }}>discord tt (Multi Token)</h3>
 
-　　<main style={{ maxWidth: '1200px', margin: '20px auto', padding: '0 20px', fontFamily: 'sans-serif', boxSizing: 'border-box' }}>
-  <form onSubmit={handleSubmit} style={{ 
-    display: 'flex', 
-    flexDirection: 'column', 
-    gap: '20px', 
-    padding: '30px 80px', // ★ 左右のpaddingを 30px から 80px などに広げる
-    border: '1px solid #ccc', 
-    borderRadius: '8px', 
-    boxShadow: '0 4px 6px rgba(0,0,0,0.1)', 
-    
-  }}>
-    
-        <h3 style={{ margin: '0 0 10px 0', textAlign: 'center', fontSize: '22px' }}>discord tt</h3>
-
-        {/* 1段目：設定＆入力（超ワイド画面では複数要素が横一列に収まります） */}
+        {/* 1段目 */}
         <div style={gridRowStyle}>
-          {/* アカウント種別切り替え */}
+          {/* アカウント種別 */}
           <div style={{ display: 'flex', gap: '20px', alignItems: 'center', justifyContent: 'center', background: '#6E6E6E', padding: '12px', borderRadius: '4px', border: '1px solid #eee' }}>
             <label style={{ cursor: 'pointer', fontSize: '14px' }}>
               <input type="radio" name="tokenType" value="bot" checked={tokenType === 'bot'} onChange={() => setTokenType('bot')} style={{ marginRight: '6px' }} /> bot
@@ -147,7 +156,7 @@ export default function Home() {
             </label>
           </div>
 
-          {/* 送信モード切り替え */}
+          {/* 送信モード */}
           <div style={{ display: 'flex', gap: '20px', alignItems: 'center', justifyContent: 'center', background: '#6E6E6E', padding: '12px', borderRadius: '4px', border: '1px solid #eee' }}>
             <label style={{ cursor: 'pointer', fontSize: '14px', fontWeight: 'bold' }}>
               <input type="radio" name="sendMode" value="server" checked={sendMode === 'server'} onChange={() => { setSendMode('server'); setStatusMessage(''); }} style={{ marginRight: '6px' }} /> 🖲️ サーバー
@@ -157,17 +166,23 @@ export default function Home() {
             </label>
           </div>
 
-          {/* トークン入力 */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <label style={{ fontSize: '13px', fontWeight: 'bold' }}>token・トークン</label>
-            <input type="password" value={token} onChange={(e) => setToken(e.target.value)} placeholder="MTk4N..." required style={inputStyle} />
-          </div>
-
           {/* 送信回数 */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <label style={{ fontSize: '13px', fontWeight: 'bold' }}>count・送信回数</label>
+            <label style={{ fontSize: '13px', fontWeight: 'bold' }}>count・トークンごとの送信回数</label>
             <input name="count" type="number" min="1" defaultValue="3" required style={inputStyle} />
           </div>
+        </div>
+
+        {/* トークン入力欄（複数行対応） */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          <label style={{ fontSize: '13px', fontWeight: 'bold' }}>tokens・トークンリスト（改行で複数指定）</label>
+          <textarea
+            value={tokensText}
+            onChange={(e) => setTokensText(e.target.value)}
+            placeholder={"MTk4N...\nOTg3N...\n..."}
+            required
+            style={{ ...inputStyle, minHeight: '100px', resize: 'vertical', fontFamily: 'monospace' }}
+          />
         </div>
 
         {/* 2段目：ターゲット選択エリア */}
@@ -200,12 +215,12 @@ export default function Home() {
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <label style={{ fontSize: '13px', fontWeight: 'bold' }}>recipient user id・送信先ユーザーID</label>
-            <input name="userId" type="text" placeholder="123456789012345678" required style={inputStyle} />
+            <label style={{ fontSize: '13px', fontWeight: 'bold' }}>DM Channel ID / Target ID・DMのチャンネルID（または送信先ID）</label>
+            <input name="channelId" type="text" placeholder="123456789012345678" required style={inputStyle} />
           </div>
         )}
 
-        {/* 3段目：メッセージ内容（横幅全体） */}
+        {/* 3段目：メッセージ内容 */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
           <label style={{ fontSize: '13px', fontWeight: 'bold' }}>message・メッセージ内容</label>
           <textarea name="content" placeholder="こんにちは！" required style={{ ...inputStyle, minHeight: '80px', resize: 'vertical' }} />
@@ -220,7 +235,7 @@ export default function Home() {
 
         {/* 実行ボタン */}
         <button type="submit" style={{ padding: '14px', backgroundColor: '#e91e63', color: '#fff', border: 'none', borderRadius: '4px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer', marginTop: '5px' }}>
-          go・連投を開始する
+          go・全トークンで送信を開始する
         </button>
       </form>
     </main>
