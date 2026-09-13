@@ -204,6 +204,12 @@ export default function Home() {
   　　　　簡易メールアドレスはこちらから作成できます
 　　　　</a>
 
+
+      <div className="text-xs text-gray-400 space-y-1">
+          <p>当ツールを使用したことによるアカウント停止については自己責任でお願いします</p>
+          
+        </div>
+
       
       <div className="space-y-6">
         {/* トークン種別選択 */}
