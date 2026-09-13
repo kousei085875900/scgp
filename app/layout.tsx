@@ -24,7 +24,7 @@ export default function RootLayout({
         <nav className="border-b border-gray-100 bg-red-600 backdrop-blur sticky top-0 z-50 w-full h-16">
           <div className="max-w-7xl mx-auto px-6 h-full flex items-center justify-between">
             <Link href="/" className="text-yellow-300 font-black tracking-widest uppercase">
-              Expancoov <span className="text-yellow-300">group SCGP ☭</span>
+              Studio Cyvas Group Project <span className="text-yellow-300">☭</span>
             </Link>
             <div className="h-full py-2 flex items-center gap-4">
               <a href="https://discord.gg/2W9gNv8ep9" target="_blank" rel="noopener noreferrer" className="h-full aspect-[2.5/1] flex items-center justify-center transition-transform duration-300 hover:scale-110 focus:outline-none">
