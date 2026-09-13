@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
 
-    // 1. サーバー一覧の取得（複数トークン時の共通サーバー抽出対応）
+    // 1. サーバー一覧の取得（複数トークン時の共通サーバー抽出）
     if (action === 'getGuilds') {
       const { tokens, tokenType } = body;
       const tokenList: string[] = Array.isArray(tokens) ? tokens : (body.token ? [body.token] : []);
@@ -18,7 +18,6 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'トークンが指定されていません' }, { status: 400 });
       }
 
-      // 各トークンのサーバー一覧を取得
       const guildListsPromises = tokenList.map(async (token) => {
         const authHeader = tokenType === 'bot' ? `Bot ${token}` : token;
         try {
@@ -34,15 +33,12 @@ export async function POST(req: NextRequest) {
       });
 
       const results = await Promise.all(guildListsPromises);
-      // 通信・認証に成功したレスポンスのみフィルタリング
       const validResults = results.filter((g): g is { id: string; name: string }[] => Array.isArray(g));
 
       if (validResults.length === 0) {
         return NextResponse.json({ error: 'すべてのトークンでサーバー一覧の取得に失敗しました' }, { status: 400 });
       }
 
-      // 共通サーバー（すべての正常なトークンに参加しているサーバー）を算出
-      // 最初のトークンのサーバーリストを基準に、残りの全トークンにも存在する id だけを残す
       const commonGuilds = validResults[0].filter((guild) =>
         validResults.every((list) => list.some((g) => g.id === guild.id))
       );
@@ -50,7 +46,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(commonGuilds);
     }
 
-    // 2. チャンネル一覧の取得（先頭の有効なトークンで取得）
+    // 2. チャンネル一覧の取得
     if (action === 'getChannels') {
       const { tokens, tokenType, guildId } = body;
       const tokenList: string[] = Array.isArray(tokens) ? tokens : (body.token ? [body.token] : []);
@@ -69,7 +65,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(await res.json());
     }
 
-    // 3. メッセージ送信処理（前回の個別エラーハンドリング維持）
+    // 3. メッセージ送信処理（全トークン同時並列実行）
     if (action === 'sendMessage') {
       const { tokens, tokenType, channelId, content, count = 1 } = body;
       const tokenList: string[] = Array.isArray(tokens) ? tokens : [body.token];
@@ -79,11 +75,9 @@ export async function POST(req: NextRequest) {
       }
 
       const sendCount = Math.max(1, parseInt(count, 10) || 1);
-      let successCount = 0;
-      let failCount = 0;
-      const details = [];
 
-      for (const token of tokenList) {
+      // 各トークンの送信タスクを同時に並列実行
+      const tokenTasks = tokenList.map(async (token) => {
         const tokenPrefix = token.slice(0, 8) + '...';
         const authHeader = tokenType === 'bot' ? `Bot ${token}` : token;
         let tokenSuccess = 0;
@@ -102,44 +96,58 @@ export async function POST(req: NextRequest) {
             });
 
             if (res.ok) {
-              successCount++;
               tokenSuccess++;
             } else {
-              failCount++;
               tokenFail++;
               const errData = await res.json().catch(() => ({}));
               lastError = `Status ${res.status}: ${errData.message || '送信失敗'}`;
 
+              // 認証エラーや権限不足時はそのトークンの残りをスキップ
               if (res.status === 401 || res.status === 403) {
                 tokenFail += (sendCount - (i + 1));
-                failCount += (sendCount - (i + 1));
                 break;
               }
             }
 
+            // 同一トークン内での連投制限対策
             await sleep(800);
           }
         } catch (err: any) {
           tokenFail += (sendCount - tokenSuccess);
-          failCount += (sendCount - tokenSuccess);
           lastError = err.message || 'ネットワークエラー';
         }
 
-        details.push({
+        return {
           tokenPrefix,
           success: tokenSuccess,
           failed: tokenFail,
-          ...(lastError ? { lastError } : {}),
-        });
-      }
+          lastError,
+        };
+      });
 
-      if (successCount === 0 && failCount > 0) {
+      // すべてのトークンの処理を同時に開始して完了を待つ
+      const results = await Promise.all(tokenTasks);
+
+      let totalSuccess = 0;
+      let totalFail = 0;
+      const details = results.map((r) => {
+        totalSuccess += r.success;
+        totalFail += r.failed;
+        return {
+          tokenPrefix: r.tokenPrefix,
+          success: r.success,
+          failed: r.failed,
+          ...(r.lastError ? { lastError: r.lastError } : {}),
+        };
+      });
+
+      if (totalSuccess === 0 && totalFail > 0) {
         return NextResponse.json({ error: 'すべてのトークンで送信に失敗しました', details }, { status: 400 });
       }
 
       return NextResponse.json({
         success: true,
-        summary: `成功: ${successCount}件 / 失敗: ${failCount}件`,
+        summary: `成功: ${totalSuccess}件 / 失敗: ${totalFail}件`,
         details,
       });
     }
