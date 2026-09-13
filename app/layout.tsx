@@ -30,7 +30,7 @@ export default function RootLayout({
               <a href="https://discord.gg/2W9gNv8ep9" target="_blank" rel="noopener noreferrer" className="h-full aspect-[2.5/1] flex items-center justify-center transition-transform duration-300 hover:scale-110 focus:outline-none">
                 <img src="/dlogo.png" alt="Discord" className="h-full w-full object-contain p-1 transition-opacity duration-300 hover:opacity-80" />
               </a>
-              <a href="https://github.com/kousei0413/scgp" target="_blank" rel="noopener noreferrer" className="h-full aspect-[2.5/1] flex items-center justify-center transition-transform duration-300 hover:scale-110 focus:outline-none ml-3">
+              <a href="https://github.com/kousei085875900" target="_blank" rel="noopener noreferrer" className="h-full aspect-[2.5/1] flex items-center justify-center transition-transform duration-300 hover:scale-110 focus:outline-none ml-3">
                 <img src="/glogo.png" alt="github" className="h-full w-full object-contain p-1 transition-opacity duration-300 hover:opacity-80" />
               </a>
             </div>
