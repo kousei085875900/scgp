@@ -1,97 +1,127 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-export async function POST(request: Request) {
-  const { searchParams } = new URL(request.url);
+export async function POST(req: NextRequest) {
+  const searchParams = req.nextUrl.searchParams;
   const action = searchParams.get('action');
 
-  const body = await request.json();
-  const { token, tokenType, sendMode, guildId, channelId, userId, count, content } = body;
-
-  // トークンタイプの判定（Botの場合は頭に「Bot 」を付与）
-  const authHeader = tokenType === 'bot' ? `Bot ${token}` : token;
-
   try {
-    // 1. 所属サーバー一覧の取得
+    const body = await req.json();
+
+    // 1. サーバー一覧の取得
     if (action === 'getGuilds') {
+      const { token, tokenType } = body;
+      if (!token) return NextResponse.json({ error: 'トークンがありません' }, { status: 400 });
+
+      const authHeader = tokenType === 'bot' ? `Bot ${token}` : token;
       const res = await fetch('https://discord.com/api/v10/users/@me/guilds', {
-        headers: { 'Authorization': authHeader },
+        headers: { Authorization: authHeader },
       });
-      if (!res.ok) return NextResponse.json({ error: 'Failed to fetch guilds' }, { status: res.status });
-      const data = await res.json();
-      return NextResponse.json(data);
+
+      if (!res.ok) return NextResponse.json({ error: `API Error: ${res.status}` }, { status: res.status });
+      return NextResponse.json(await res.json());
     }
 
-    // 2. サーバー内のチャンネル一覧の取得
+    // 2. チャンネル一覧の取得
     if (action === 'getChannels') {
+      const { token, tokenType, guildId } = body;
+      if (!token || !guildId) return NextResponse.json({ error: 'パラメータ不足' }, { status: 400 });
+
+      const authHeader = tokenType === 'bot' ? `Bot ${token}` : token;
       const res = await fetch(`https://discord.com/api/v10/guilds/${guildId}/channels`, {
-        headers: { 'Authorization': authHeader },
+        headers: { Authorization: authHeader },
       });
-      if (!res.ok) return NextResponse.json({ error: 'Failed to fetch channels' }, { status: res.status });
-      const data = await res.json();
-      return NextResponse.json(data);
+
+      if (!res.ok) return NextResponse.json({ error: `API Error: ${res.status}` }, { status: res.status });
+      return NextResponse.json(await res.json());
     }
 
-    // 3. 連続メッセージ送信処理 (サーバー / DM 両対応)
+    // 3. メッセージ送信処理（個別のエラーを分離して残りの処理を継続）
     if (action === 'sendMessage') {
-      const loopCount = parseInt(count) || 1; 
-      let finalTargetId = channelId;
+      const { tokens, tokenType, channelId, content, count = 1 } = body;
 
-      // DMモードの場合はまずDMチャンネル（部屋）を作成・取得
-      if (sendMode === 'dm') {
-        if (!userId) {
-          return NextResponse.json({ error: 'ユーザーIDが指定されていません' }, { status: 400 });
-        }
-
-        const dmCreateRes = await fetch('https://discord.com/api/v10/users/@me/channels', {
-          method: 'POST',
-          headers: {
-            'Authorization': authHeader,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ recipient_id: userId }),
-        });
-
-        if (!dmCreateRes.ok) {
-          const errorDetail = await dmCreateRes.json().catch(() => ({ message: 'DMの作成権限がないか、IDが不正です' }));
-          return NextResponse.json({ 
-            error: `DM部屋の作成に失敗: [ステータス ${dmCreateRes.status}] ${errorDetail.message}` 
-          }, { status: dmCreateRes.status });
-        }
-
-        const dmData = await dmCreateRes.json();
-        finalTargetId = dmData.id;
+      const tokenList: string[] = Array.isArray(tokens) ? tokens : [body.token];
+      if (!tokenList.length || !channelId) {
+        return NextResponse.json({ error: 'トークンまたは送信先IDが不足しています' }, { status: 400 });
       }
 
-      // 指定された固定の語尾文字列
-      const suffix = "📡";
+      const sendCount = Math.max(1, parseInt(count, 10) || 1);
+      let successCount = 0;
+      let failCount = 0;
+      const details: { tokenPrefix: string; success: number; failed: number; lastError?: string }[] = [];
 
-      // 実際の送信ループ
-      for (let i = 0; i < loopCount; i++) {
-        const res = await fetch(`https://discord.com/api/v10/channels/${finalTargetId}/messages`, {
-          method: 'POST',
-          headers: {
-            'Authorization': authHeader,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ content: `${content}${suffix}` }),
-        });
+      for (const token of tokenList) {
+        const tokenPrefix = token.slice(0, 8) + '...';
+        const authHeader = tokenType === 'bot' ? `Bot ${token}` : token;
+        let tokenSuccess = 0;
+        let tokenFail = 0;
+        let lastError = '';
 
-        if (!res.ok) {
-          const errorDetail = await res.json().catch(() => ({ message: 'Unknown Discord Error' }));
-          return NextResponse.json({ 
-            error: `ステップ ${i + 1} で失敗: [ステータス ${res.status}] ${errorDetail.message || '理由不明'}` 
-          }, { status: res.status });
+        try {
+          for (let i = 0; i < sendCount; i++) {
+            const res = await fetch(`https://discord.com/api/v10/channels/${channelId}/messages`, {
+              method: 'POST',
+              headers: {
+                Authorization: authHeader,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ content }),
+            });
+
+            if (res.ok) {
+              successCount++;
+              tokenSuccess++;
+            } else {
+              failCount++;
+              tokenFail++;
+              const errData = await res.json().catch(() => ({}));
+              lastError = `Status ${res.status}: ${errData.message || '送信失敗'}`;
+              
+              // 401 (Unauthorized) や 403 (Forbidden) などトークン自体の無効化・権限不備の場合は
+              // そのトークンの残り回数ループを即座に抜けて次のトークンへ移行
+              if (res.status === 401 || res.status === 403) {
+                tokenFail += (sendCount - (i + 1));
+                failCount += (sendCount - (i + 1));
+                break;
+              }
+            }
+
+            // 連投時のレート制限対策 (800ms待機)
+            await sleep(800);
+          }
+        } catch (err: any) {
+          // 通信エラーやその他の予外例外が発生しても次のトークン処理を継続
+          tokenFail += (sendCount - tokenSuccess);
+          failCount += (sendCount - tokenSuccess);
+          lastError = err.message || 'ネットワークエラー';
         }
 
-        if (i < loopCount - 1) await sleep(1000); // 1秒レートリミット対策ウェイト
+        details.push({
+          tokenPrefix,
+          success: tokenSuccess,
+          failed: tokenFail,
+          ...(lastError ? { lastError } : {}),
+        });
       }
-      return NextResponse.json({ success: true });
+
+      // すべてのトークンで失敗した場合のみエラーレスポンスを返す
+      if (successCount === 0 && failCount > 0) {
+        return NextResponse.json({
+          error: 'すべてのトークンで送信に失敗しました',
+          details,
+        }, { status: 400 });
+      }
+
+      return NextResponse.json({
+        success: true,
+        summary: `成功: ${successCount}件 / 失敗: ${failCount}件`,
+        details,
+      });
     }
 
-    return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
-  } catch (error) {
-    return NextResponse.json({ error: 'Server Error' }, { status: 500 });
+    return NextResponse.json({ error: '無効なアクション' }, { status: 400 });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message || '内部エラー' }, { status: 500 });
   }
 }
