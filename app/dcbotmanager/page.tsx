@@ -196,7 +196,7 @@ export default function Home() {
         【注意】selfモードでユーザートークンでメッセージを送信する場合アカウントが停止される可能性があります
       </p>
 
-      <h1 className="text-red-500">
+      <p className="text-red-500">
         絶対にメインアカウントで試さないでください
       </p>
 
