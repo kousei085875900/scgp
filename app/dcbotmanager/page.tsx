@@ -187,8 +187,24 @@ export default function Home() {
 
   return (
     <main className="max-w-3xl mx-auto p-6 font-sans">
-      <h1 className="text-2xl font-bold mb-6">Discord Message Sender</h1>
+      
+      <h1 className="text-2xl font-bold mb-6">
+        Discord token manager
+      </h1>
 
+<h1 className="text-2xl font-bold mb-4">
+        【注意】selfモードでユーザートークンでメッセージを送信する場合アカウントが停止される可能性があります
+      </h1>
+
+      <h1 className="text-2xl font-bold text-red-500 mb-4">
+        絶対にメインアカウントで試さないでください
+      </h1>
+
+      <a href="https://mail.scgp.jp/" target="_blank" rel="noopener noreferrer"className="text-blue-500 hover:underline">
+  　　　　簡易メールアドレスはこちらから作成できます
+　　　　</a>
+
+      
       <div className="space-y-6">
         {/* トークン種別選択 */}
         <div>
