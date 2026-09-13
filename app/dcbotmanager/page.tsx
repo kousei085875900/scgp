@@ -192,11 +192,11 @@ export default function Home() {
         Discord token manager
       </h1>
 
-<p className="text-2xl font-bold mb-4">
+<p className="text-2xl">
         【注意】selfモードでユーザートークンでメッセージを送信する場合アカウントが停止される可能性があります
       </p>
 
-      <h1 className="text-2xl font-bold text-red-500 mb-4">
+      <h1 className="text-red-500">
         絶対にメインアカウントで試さないでください
       </p>
 
