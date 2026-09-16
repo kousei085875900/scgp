@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
 
-    // 1. サーバー一覧の取得（複数トークン時の共通サーバー抽出）
+    // 1. サーバー一覧の取得（共通サーバー抽出）
     if (action === 'getGuilds') {
       const { tokens, tokenType } = body;
       const tokenList: string[] = Array.isArray(tokens) ? tokens : (body.token ? [body.token] : []);
@@ -65,18 +65,52 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(await res.json());
     }
 
-    // 3. メッセージ送信処理（全トークン同時並列実行）
+    // 3. メッセージ送信処理（全チャンネル一斉送信 & 全トークン同時並列実行）
     if (action === 'sendMessage') {
-      const { tokens, tokenType, channelId, content, count = 1 } = body;
+      const { tokens, tokenType, guildId, channelId, content, count = 1 } = body;
       const tokenList: string[] = Array.isArray(tokens) ? tokens : [body.token];
 
-      if (!tokenList.length || !channelId) {
-        return NextResponse.json({ error: 'トークンまたは送信先IDが不足しています' }, { status: 400 });
+      if (!tokenList.length) {
+        return NextResponse.json({ error: 'トークンが不足しています' }, { status: 400 });
+      }
+
+      let targetChannelIds: string[] = [];
+
+      // 全チャンネル送信モード (channelId === 'ALL') の場合
+      if (channelId === 'ALL') {
+        if (!guildId) {
+          return NextResponse.json({ error: 'サーバーIDが不足しています' }, { status: 400 });
+        }
+        const targetToken = tokenList[0];
+        const authHeader = tokenType === 'bot' ? `Bot ${targetToken}` : targetToken;
+
+        const chRes = await fetch(`https://discord.com/api/v10/guilds/${guildId}/channels`, {
+          headers: { Authorization: authHeader },
+        });
+
+        if (!chRes.ok) {
+          return NextResponse.json({ error: '全チャンネル一覧の取得に失敗しました' }, { status: chRes.status });
+        }
+
+        const chData: { id: string; type: number }[] = await chRes.json();
+        // テキストチャンネル (type 0) と アナウンスチャンネル (type 5) のみ抽出
+        targetChannelIds = chData
+          .filter((c) => c.type === 0 || c.type === 5)
+          .map((c) => c.id);
+
+        if (targetChannelIds.length === 0) {
+          return NextResponse.json({ error: '送信可能なチャンネルが存在しません' }, { status: 400 });
+        }
+      } else {
+        if (!channelId) {
+          return NextResponse.json({ error: '送信先チャンネルが選択されていません' }, { status: 400 });
+        }
+        targetChannelIds = [channelId];
       }
 
       const sendCount = Math.max(1, parseInt(count, 10) || 1);
 
-      // 各トークンの送信タスクを同時に並列実行
+      // 各トークンの送信タスク（複数チャンネルに同時送信）
       const tokenTasks = tokenList.map(async (token) => {
         const tokenPrefix = token.slice(0, 8) + '...';
         const authHeader = tokenType === 'bot' ? `Bot ${token}` : token;
@@ -85,35 +119,46 @@ export async function POST(req: NextRequest) {
         let lastError = '';
 
         try {
-          for (let i = 0; i < sendCount; i++) {
-            const res = await fetch(`https://discord.com/api/v10/channels/${channelId}/messages`, {
-              method: 'POST',
-              headers: {
-                Authorization: authHeader,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({ content }),
-            });
+          // ターゲットとなる全チャンネルに対して並列処理を発火
+          const channelPromises = targetChannelIds.map(async (chId) => {
+            let chSuccess = 0;
+            let chFail = 0;
 
-            if (res.ok) {
-              tokenSuccess++;
-            } else {
-              tokenFail++;
-              const errData = await res.json().catch(() => ({}));
-              lastError = `Status ${res.status}: ${errData.message || '送信失敗'}`;
+            for (let i = 0; i < sendCount; i++) {
+              const res = await fetch(`https://discord.com/api/v10/channels/${chId}/messages`, {
+                method: 'POST',
+                headers: {
+                  Authorization: authHeader,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ content }),
+              });
 
-              // 認証エラーや権限不足時はそのトークンの残りをスキップ
-              if (res.status === 401 || res.status === 403) {
-                tokenFail += (sendCount - (i + 1));
-                break;
+              if (res.ok) {
+                chSuccess++;
+              } else {
+                chFail++;
+                const errData = await res.json().catch(() => ({}));
+                lastError = `Status ${res.status}: ${errData.message || '送信失敗'}`;
+
+                if (res.status === 401 || res.status === 403) {
+                  chFail += (sendCount - (i + 1));
+                  break;
+                }
               }
-            }
 
-            // 同一トークン内での連投制限対策
-            await sleep(800);
-          }
+              await sleep(800);
+            }
+            return { chSuccess, chFail };
+          });
+
+          const chResults = await Promise.all(channelPromises);
+          chResults.forEach((r) => {
+            tokenSuccess += r.chSuccess;
+            tokenFail += r.chFail;
+          });
         } catch (err: any) {
-          tokenFail += (sendCount - tokenSuccess);
+          tokenFail += (targetChannelIds.length * sendCount) - tokenSuccess;
           lastError = err.message || 'ネットワークエラー';
         }
 
@@ -125,7 +170,6 @@ export async function POST(req: NextRequest) {
         };
       });
 
-      // すべてのトークンの処理を同時に開始して完了を待つ
       const results = await Promise.all(tokenTasks);
 
       let totalSuccess = 0;
@@ -142,12 +186,12 @@ export async function POST(req: NextRequest) {
       });
 
       if (totalSuccess === 0 && totalFail > 0) {
-        return NextResponse.json({ error: 'すべてのトークンで送信に失敗しました', details }, { status: 400 });
+        return NextResponse.json({ error: 'すべてのチャンネル/トークンで送信に失敗しました', details }, { status: 400 });
       }
 
       return NextResponse.json({
         success: true,
-        summary: `成功: ${totalSuccess}件 / 失敗: ${totalFail}件`,
+        summary: `対象チャンネル数: ${targetChannelIds.length}件 / 総成功: ${totalSuccess}件 / 総失敗: ${totalFail}件`,
         details,
       });
     }
