@@ -186,19 +186,21 @@ export default function Home() {
   const tokensCount = getTokens().length;
 
   return (
-    <div className="space-y-12 w-full max-w-3xl mx-auto p-4 sm:p-6 font-sans">
-      <div className="space-y-6">
-        {/* 小見出し */}
-        
-        
+    <div className="space-y-8 w-full max-w-3xl mx-auto p-4 sm:p-6 font-sans">
+      {/* ヘッダーセクション */}
+      <div className="space-y-2">
+        <div className="text-xs font-bold tracking-widest text-red-600 uppercase">
+          Expancoov Project Portal
+        </div>
+        <h1 className="text-4xl sm:text-6xl font-black text-red-600 tracking-tight leading-tight">
+          SCGP<br />
+        </h1>
+      </div>
 
-      
+      <hr className="border-red-600/30 my-6" />
 
       {/* ツール機能セクション */}
-      <div className="space-y-6 pt-4">
-        <div className="text-xs font-bold tracking-widest text-red-600 uppercase">
-          Tool Module
-        </div>
+      <div className="space-y-6">
         <h2 className="text-2xl sm:text-3xl font-black text-gray-900 dark:text-white tracking-tight">
           Discord token manager
         </h2>
