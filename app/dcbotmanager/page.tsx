@@ -208,7 +208,7 @@ export default function Home() {
         {/* 注意事項 */}
         <div className="space-y-2 p-4 border border-red-200 bg-red-50 dark:bg-red-950/30 dark:border-red-900/50 rounded">
           <p className="text-base font-bold text-red-600 dark:text-red-400">
-            【注意】selfモードでユーザートークンでメッセージを送信する場合アカウントが停止される可能性があります
+            【注意】User Tokenモードでユーザートークンでメッセージを送信する場合アカウントが停止される可能性があります
           </p>
 
           <p className="text-sm font-semibold text-red-500">
