@@ -6,7 +6,7 @@ export default function Home() {
       <div className="space-y-6">
         {/* 小見出し */}
         <div className="text-xs font-bold tracking-widest text-red-600 uppercase">
-          Expancoov Project Portal
+          Studio Cyvas Group Project Portal
         </div>
         
         {/* メインタイトル */}
