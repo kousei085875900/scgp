@@ -47,7 +47,7 @@ export default function Home() {
       .filter((t) => t.length > 0);
   };
 
-  // 1. サーバー一覧の取得（複数トークン時は共通サーバーを抽出）
+  // 1. サーバー一覧の取得
   const handleLoadGuilds = async () => {
     const tokens = getTokens();
     if (tokens.length === 0) {
@@ -159,6 +159,7 @@ export default function Home() {
         body: JSON.stringify({
           tokens,
           tokenType,
+          guildId: selectedGuild,
           channelId: selectedChannel,
           content: message,
           count,
@@ -190,7 +191,7 @@ export default function Home() {
       {/* ヘッダーセクション */}
       <div className="space-y-2">
         <div className="text-xs font-bold tracking-widest text-red-600 uppercase">
-          Studio Cyvas Group Project Portal
+          Expancoov Project Portal
         </div>
         <h1 className="text-4xl sm:text-6xl font-black text-red-600 tracking-tight leading-tight">
           SCGP<br />
@@ -208,7 +209,7 @@ export default function Home() {
         {/* 注意事項 */}
         <div className="space-y-2 p-4 border border-red-200 bg-red-50 dark:bg-red-950/30 dark:border-red-900/50 rounded">
           <p className="text-base font-bold text-red-600 dark:text-red-400">
-            【注意】User Tokenモードでユーザートークンでメッセージを送信する場合アカウントが停止される可能性があります
+            【注意】selfモードでユーザートークンでメッセージを送信する場合アカウントが停止される可能性があります
           </p>
 
           <p className="text-sm font-semibold text-red-500">
@@ -316,10 +317,21 @@ export default function Home() {
             <select
               value={selectedChannel}
               onChange={(e) => setSelectedChannel(e.target.value)}
-              disabled={channels.length === 0}
+              disabled={channels.length === 0 || isLoadingChannels}
               className="w-full p-2.5 border rounded border-gray-300 dark:border-gray-800 dark:bg-gray-950 text-sm focus:outline-none focus:ring-1 focus:ring-red-600 disabled:opacity-50"
             >
-              <option value="">-- チャンネルを選択 --</option>
+              <option value="">
+                {isLoadingChannels
+                  ? '-- チャンネル情報取得中 --'
+                  : channels.length === 0
+                  ? '-- 選択可能なチャンネルがありません --'
+                  : '-- チャンネルを選択 --'}
+              </option>
+              {channels.length > 0 && (
+                <option value="ALL" className="font-bold text-red-600">
+                  ⚡ 【一斉送信】すべてのチャンネルに送信 ({channels.length}箇所)
+                </option>
+              )}
               {channels.map((channel) => (
                 <option key={channel.id} value={channel.id}>
                   #{channel.name}
