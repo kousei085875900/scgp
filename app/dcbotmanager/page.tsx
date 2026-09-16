@@ -190,7 +190,7 @@ export default function Home() {
       {/* ヘッダーセクション */}
       <div className="space-y-2">
         <div className="text-xs font-bold tracking-widest text-red-600 uppercase">
-          Expancoov Project Portal
+          Studio Cyvas Group Project Portal
         </div>
         <h1 className="text-4xl sm:text-6xl font-black text-red-600 tracking-tight leading-tight">
           SCGP<br />
