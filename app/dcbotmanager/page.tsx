@@ -189,13 +189,10 @@ export default function Home() {
     <div className="space-y-12 w-full max-w-3xl mx-auto p-4 sm:p-6 font-sans">
       <div className="space-y-6">
         {/* 小見出し */}
-        <div className="text-xs font-bold tracking-widest text-red-600 uppercase">
-          Expancoov Project Portal
-        </div>
         
         
 
-      <hr className="border-red-600/30 my-8" />
+      
 
       {/* ツール機能セクション */}
       <div className="space-y-6 pt-4">
