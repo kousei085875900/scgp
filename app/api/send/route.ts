@@ -7,7 +7,6 @@ interface RequestBody {
   channelId?: string;
   content?: string;
   count?: number;
-  spoofBrowser?: boolean;
 }
 
 interface TokenDetailResult {
@@ -17,51 +16,62 @@ interface TokenDetailResult {
   lastError?: string;
 }
 
-// Discord Web版クライアントのプロパティを模倣するヘルパー関数
-function generateSuperProperties() {
+// 公式デスクトップアプリ（Electron）のクライアント情報を完全模倣するプロパティ構造
+const DISCORD_CLIENT_CONFIG = {
+  clientVersion: '1.0.9100',
+  clientBuildNumber: 285000,
+  nativeBuildNumber: 45000,
+  electronVersion: '28.2.10',
+  userAgent:
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Discord/1.0.9100 Chrome/120.0.6099.291 Electron/28.2.10 Safari/537.36',
+};
+
+/**
+ * X-Super-Properties (Base64) の生成
+ * app.asar 内の Discord 識別プロパティ構造を1:1で再現
+ */
+function generateSuperProperties(): string {
   const superProps = {
     os: 'Windows',
-    browser: 'Chrome',
-    device: '',
-    system_locale: 'ja-JP',
-    browser_user_agent:
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-    browser_version: '122.0.0.0',
-    os_version: '10',
-    referrer: '',
-    referring_domain: '',
-    referrer_current: '',
-    referring_domain_current: '',
+    browser: 'Discord Client',
     release_channel: 'stable',
-    client_build_number: 275843,
-    client_event_source: null,
+    client_version: DISCORD_CLIENT_CONFIG.clientVersion,
+    os_version: '10.0.19045',
+    os_arch: 'x64',
+    app_arch: 'x64',
+    system_locale: 'ja-JP',
+    browser_user_agent: DISCORD_CLIENT_CONFIG.userAgent,
+    browser_version: DISCORD_CLIENT_CONFIG.electronVersion,
+    client_build_number: DISCORD_CLIENT_CONFIG.clientBuildNumber,
+    native_build_number: DISCORD_CLIENT_CONFIG.nativeBuildNumber,
   };
 
   return Buffer.from(JSON.stringify(superProps)).toString('base64');
 }
 
-// リクエストヘッダー構築関数
+/**
+ * リクエストヘッダーの完全偽装
+ */
 function buildHeaders(
   token: string,
   tokenType: 'bot' | 'user',
   guildId?: string,
-  channelId?: string,
-  spoofBrowser: boolean = false
+  channelId?: string
 ): Record<string, string> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     Authorization: tokenType === 'bot' ? `Bot ${token}` : token,
   };
 
-  // Webブラウザ（Discord Web版）のリクエストを模倣
-  if (spoofBrowser && tokenType === 'user') {
-    headers['User-Agent'] =
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
+  if (tokenType === 'user') {
+    headers['User-Agent'] = DISCORD_CLIENT_CONFIG.userAgent;
     headers['Origin'] = 'https://discord.com';
     headers['X-Super-Properties'] = generateSuperProperties();
     headers['X-Discord-Locale'] = 'ja';
+    headers['X-Discord-Timezone'] = 'Asia/Tokyo';
     headers['X-Debug-Options'] = 'bugReporterEnabled';
-    
+    headers['Accept-Language'] = 'ja,en-US;q=0.9,en;q=0.8';
+
     if (guildId && channelId) {
       headers['Referer'] = `https://discord.com/channels/${guildId}/${channelId}`;
     } else {
@@ -78,26 +88,26 @@ export async function POST(req: NextRequest) {
 
   try {
     const body: RequestBody = await req.json();
-    const { tokens, tokenType, guildId, channelId, content, spoofBrowser = true } = body;
+    const { tokens, tokenType, guildId, channelId, content } = body;
 
     if (!tokens || tokens.length === 0) {
-      return NextResponse.json({ error: 'トークンが提供されていません。' }, { status: 400 });
+      return NextResponse.json({ error: 'トークンが指定されていません。' }, { status: 400 });
     }
 
-    // 1. サーバー一覧の取得 (action=getGuilds)
+    // 1. サーバー一覧の取得
     if (action === 'getGuilds') {
       const allGuildMaps: Map<string, { id: string; name: string }>[] = [];
 
       for (const token of tokens) {
         const res = await fetch('https://discord.com/api/v10/users/@me/guilds', {
           method: 'GET',
-          headers: buildHeaders(token, tokenType, undefined, undefined, spoofBrowser),
+          headers: buildHeaders(token, tokenType),
         });
 
         if (!res.ok) {
           const errData = await res.json().catch(() => ({}));
           return NextResponse.json(
-            { error: `トークン認証エラー (${token.substring(0, 10)}...): ${errData.message || res.statusText}` },
+            { error: `認証エラー (${token.substring(0, 10)}...): ${errData.message || res.statusText}` },
             { status: res.status }
           );
         }
@@ -108,7 +118,6 @@ export async function POST(req: NextRequest) {
         allGuildMaps.push(guildMap);
       }
 
-      // 複数トークンの場合は全トークンに共通するサーバーのみフィルタリング
       let commonGuilds = Array.from(allGuildMaps[0].values());
       for (let i = 1; i < allGuildMaps.length; i++) {
         commonGuilds = commonGuilds.filter((g) => allGuildMaps[i].has(g.id));
@@ -117,17 +126,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(commonGuilds);
     }
 
-    // 2. チャンネル一覧の取得 (action=getChannels)
+    // 2. チャンネル一覧の取得
     if (action === 'getChannels') {
       if (!guildId) {
-        return NextResponse.json({ error: 'guildId が必要です。' }, { status: 400 });
+        return NextResponse.json({ error: 'guildId が指定されていません。' }, { status: 400 });
       }
 
-      // 最初のトークンを使用してチャンネル一覧を取得
-      const primaryToken = tokens[0];
       const res = await fetch(`https://discord.com/api/v10/guilds/${guildId}/channels`, {
         method: 'GET',
-        headers: buildHeaders(primaryToken, tokenType, guildId, undefined, spoofBrowser),
+        headers: buildHeaders(tokens[0], tokenType, guildId),
       });
 
       if (!res.ok) {
@@ -142,10 +149,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(channels);
     }
 
-    // 3. メッセージ送信 (action=sendMessage)
+    // 3. メッセージ送信
     if (action === 'sendMessage') {
       if (!channelId || !content) {
-        return NextResponse.json({ error: 'channelId および content が必要です。' }, { status: 400 });
+        return NextResponse.json({ error: 'channelId および content が指定されていません。' }, { status: 400 });
       }
 
       const executionDetails: TokenDetailResult[] = [];
@@ -158,10 +165,9 @@ export async function POST(req: NextRequest) {
 
         const res = await fetch(`https://discord.com/api/v10/channels/${channelId}/messages`, {
           method: 'POST',
-          headers: buildHeaders(token, tokenType, guildId, channelId, spoofBrowser),
+          headers: buildHeaders(token, tokenType, guildId, channelId),
           body: JSON.stringify({
             content,
-            // ブラウザ等からの送信に見せかける nonce (タイムスタンプベースのユニークID)
             nonce: Date.now().toString() + Math.floor(Math.random() * 1000).toString(),
             tts: false,
           }),
