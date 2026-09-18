@@ -1,148 +1,105 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-interface RequestBody {
-  tokens: string[];
-  tokenType: 'bot' | 'user';
-  guildId?: string;
-  channelId?: string;
-  content?: string;
-  count?: number;
-}
-
-interface TokenDetailResult {
-  tokenPrefix: string;
-  success: number;
-  failed: number;
-  lastError?: string;
-}
-
-// 公式デスクトップアプリ（Electron）のクライアント情報を完全模倣するプロパティ構造
-const DISCORD_CLIENT_CONFIG = {
-  clientVersion: '1.0.9100',
-  clientBuildNumber: 285000,
-  nativeBuildNumber: 45000,
-  electronVersion: '28.2.10',
-  userAgent:
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Discord/1.0.9100 Chrome/120.0.6099.291 Electron/28.2.10 Safari/537.36',
-};
-
-/**
- * X-Super-Properties (Base64) の生成
- * app.asar 内の Discord 識別プロパティ構造を1:1で再現
- */
-function generateSuperProperties(): string {
-  const superProps = {
-    os: 'Windows',
-    browser: 'Discord Client',
-    release_channel: 'stable',
-    client_version: DISCORD_CLIENT_CONFIG.clientVersion,
-    os_version: '10.0.19045',
-    os_arch: 'x64',
-    app_arch: 'x64',
-    system_locale: 'ja-JP',
-    browser_user_agent: DISCORD_CLIENT_CONFIG.userAgent,
-    browser_version: DISCORD_CLIENT_CONFIG.electronVersion,
-    client_build_number: DISCORD_CLIENT_CONFIG.clientBuildNumber,
-    native_build_number: DISCORD_CLIENT_CONFIG.nativeBuildNumber,
-  };
-
-  return Buffer.from(JSON.stringify(superProps)).toString('base64');
-}
-
-/**
- * リクエストヘッダーの完全偽装
- */
-function buildHeaders(
-  token: string,
-  tokenType: 'bot' | 'user',
-  guildId?: string,
-  channelId?: string
-): Record<string, string> {
+// 最新の仕様に合わせたブラウザ模倣およびX-Super-Propertiesヘッダー構築関数
+function buildHeaders(token: string, tokenType: 'bot' | 'user', spoofBrowser: boolean = true) {
   const headers: Record<string, string> = {
+    'Authorization': tokenType === 'bot' ? `Bot ${token}` : token,
     'Content-Type': 'application/json',
-    Authorization: tokenType === 'bot' ? `Bot ${token}` : token,
   };
 
-  if (tokenType === 'user') {
-    headers['User-Agent'] = DISCORD_CLIENT_CONFIG.userAgent;
-    headers['Origin'] = 'https://discord.com';
-    headers['X-Super-Properties'] = generateSuperProperties();
-    headers['X-Discord-Locale'] = 'ja';
-    headers['X-Discord-Timezone'] = 'Asia/Tokyo';
-    headers['X-Debug-Options'] = 'bugReporterEnabled';
-    headers['Accept-Language'] = 'ja,en-US;q=0.9,en;q=0.8';
+  if (spoofBrowser) {
+    headers['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+    
+    // 最新のDiscordクライアントビルド・環境シミュレーションに適合させたプロパティ
+    headers['X-Super-Properties'] = Buffer.from(
+      JSON.stringify({
+        os: 'Windows',
+        browser: 'Chrome',
+        device: '',
+        system_locale: 'ja',
+        browser_user_agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        browser_version: '124.0.0.0',
+        os_version: '10',
+        referrer: '',
+        referring_domain: '',
+        referrer_current: '',
+        referring_domain_current: '',
+        release_channel: 'stable',
+        client_build_number: 305412, // より新しいビルド番号に更新
+        client_event_source: null,
+      })
+    ).toString('base64');
 
-    if (guildId && channelId) {
-      headers['Referer'] = `https://discord.com/channels/${guildId}/${channelId}`;
-    } else {
-      headers['Referer'] = 'https://discord.com/channels/@me';
-    }
+    headers['Sec-Ch-Ua'] = '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"';
+    headers['Sec-Ch-Ua-Mobile'] = '?0';
+    headers['Sec-Ch-Ua-Platform'] = '"Windows"';
+    headers['Sec-Fetch-Site'] = 'same-origin';
+    headers['Sec-Fetch-Mode'] = 'cors';
+    headers['Sec-Fetch-Dest'] = 'empty';
+    headers['Accept-Language'] = 'ja,en-US;q=0.9,en;q=0.8';
   }
 
   return headers;
 }
 
 export async function POST(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const action = searchParams.get('action');
-
   try {
-    const body: RequestBody = await req.json();
-    const { tokens, tokenType, guildId, channelId, content } = body;
+    const action = req.nextUrl.searchParams.get('action');
+    const body = await req.json();
+    const { tokens, tokenType = 'bot', guildId, channelId, content, count = 1, spoofBrowser = true } = body;
 
-    if (!tokens || tokens.length === 0) {
-      return NextResponse.json({ error: 'トークンが指定されていません。' }, { status: 400 });
+    if (!tokens || !Array.isArray(tokens) || tokens.length === 0) {
+      return NextResponse.json({ error: '有効なトークンが指定されていません。' }, { status: 400 });
     }
 
-    // 1. サーバー一覧の取得
+    // 1. サーバー一覧の取得（複数トークンの場合は共通のサーバーを抽出）
     if (action === 'getGuilds') {
-      const allGuildMaps: Map<string, { id: string; name: string }>[] = [];
+      const guildSets: Set<string>[] = [];
+      const guildMap = new Map<string, { id: string; name: string }>();
 
       for (const token of tokens) {
         const res = await fetch('https://discord.com/api/v10/users/@me/guilds', {
           method: 'GET',
-          headers: buildHeaders(token, tokenType),
+          headers: buildHeaders(token, tokenType, spoofBrowser),
         });
 
         if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          return NextResponse.json(
-            { error: `認証エラー (${token.substring(0, 10)}...): ${errData.message || res.statusText}` },
-            { status: res.status }
-          );
+          const errText = await res.text();
+          return NextResponse.json({ error: `トークンによるサーバー取得失敗 (Status ${res.status}): ${errText}` }, { status: res.status });
         }
 
-        const data = await res.json();
-        const guildMap = new Map<string, { id: string; name: string }>();
-        data.forEach((g: any) => guildMap.set(g.id, { id: g.id, name: g.name }));
-        allGuildMaps.push(guildMap);
+        const guilds = await res.json();
+        const currentGuildIds = new Set<string>();
+        for (const g of guilds) {
+          currentGuildIds.add(g.id);
+          guildMap.set(g.id, { id: g.id, name: g.name });
+        }
+        guildSets.push(currentGuildIds);
       }
 
-      let commonGuilds = Array.from(allGuildMaps[0].values());
-      for (let i = 1; i < allGuildMaps.length; i++) {
-        commonGuilds = commonGuilds.filter((g) => allGuildMaps[i].has(g.id));
+      let commonIds = guildSets[0];
+      for (let i = 1; i < guildSets.length; i++) {
+        commonIds = new Set([...commonIds].filter((id) => guildSets[i].has(id)));
       }
 
+      const commonGuilds = Array.from(commonIds).map((id) => guildMap.get(id)!);
       return NextResponse.json(commonGuilds);
     }
 
     // 2. チャンネル一覧の取得
     if (action === 'getChannels') {
       if (!guildId) {
-        return NextResponse.json({ error: 'guildId が指定されていません。' }, { status: 400 });
+        return NextResponse.json({ error: 'サーバーIDが指定されていません。' }, { status: 400 });
       }
 
       const res = await fetch(`https://discord.com/api/v10/guilds/${guildId}/channels`, {
         method: 'GET',
-        headers: buildHeaders(tokens[0], tokenType, guildId),
+        headers: buildHeaders(tokens[0], tokenType, spoofBrowser),
       });
 
       if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        return NextResponse.json(
-          { error: `チャンネル取得失敗: ${errData.message || res.statusText}` },
-          { status: res.status }
-        );
+        const errText = await res.text();
+        return NextResponse.json({ error: `チャンネル取得失敗 (Status ${res.status}): ${errText}` }, { status: res.status });
       }
 
       const channels = await res.json();
@@ -152,48 +109,104 @@ export async function POST(req: NextRequest) {
     // 3. メッセージ送信
     if (action === 'sendMessage') {
       if (!channelId || !content) {
-        return NextResponse.json({ error: 'channelId および content が指定されていません。' }, { status: 400 });
+        return NextResponse.json({ error: 'チャンネルIDまたはメッセージ内容が不足しています。' }, { status: 400 });
       }
 
-      const executionDetails: TokenDetailResult[] = [];
+      const details = [];
 
       for (const token of tokens) {
         const prefix = token.substring(0, 10) + '...';
-        let success = 0;
-        let failed = 0;
+        let successCount = 0;
+        let failCount = 0;
         let lastError = '';
 
-        const res = await fetch(`https://discord.com/api/v10/channels/${channelId}/messages`, {
-          method: 'POST',
-          headers: buildHeaders(token, tokenType, guildId, channelId),
-          body: JSON.stringify({
-            content,
-            nonce: Date.now().toString() + Math.floor(Math.random() * 1000).toString(),
-            tts: false,
-          }),
-        });
+        for (let i = 0; i < count; i++) {
+          try {
+            const res = await fetch(`https://discord.com/api/v10/channels/${channelId}/messages`, {
+              method: 'POST',
+              headers: buildHeaders(token, tokenType, spoofBrowser),
+              body: JSON.stringify({ content }),
+            });
 
-        if (res.ok) {
-          success++;
-        } else {
-          failed++;
-          const errData = await res.json().catch(() => ({}));
-          lastError = errData.message || `HTTP ${res.status}`;
+            if (res.ok) {
+              successCount++;
+            } else {
+              failCount++;
+              const errData = await res.json().catch(() => ({}));
+              lastError = errData.message || `HTTP ${res.status}`;
+            }
+          } catch (err: any) {
+            failCount++;
+            lastError = err.message || 'ネットワークエラー';
+          }
         }
 
-        executionDetails.push({
+        details.push({
           tokenPrefix: prefix,
-          success,
-          failed,
+          success: successCount,
+          failed: failCount,
           lastError: lastError || undefined,
         });
       }
 
-      return NextResponse.json({ details: executionDetails });
+      return NextResponse.json({ details });
     }
 
-    return NextResponse.json({ error: '無効な action です。' }, { status: 400 });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message || '内部サーバーエラー' }, { status: 500 });
+    // 4. 招待リンクからのサーバー参加
+    if (action === 'joinGuild') {
+      const { inviteCode } = body;
+      if (!inviteCode) {
+        return NextResponse.json({ error: '招待コードが指定されていません。' }, { status: 400 });
+      }
+
+      const cleanCode = inviteCode.includes('/') 
+        ? inviteCode.split('/').pop()?.split('?')[0] 
+        : inviteCode;
+
+      const details = [];
+
+      for (const token of tokens) {
+        const prefix = token.substring(0, 10) + '...';
+
+        try {
+          const res = await fetch(`https://discord.com/api/v10/invites/${cleanCode}`, {
+            method: 'POST',
+            headers: buildHeaders(token, tokenType, spoofBrowser),
+            body: JSON.stringify({}),
+          });
+
+          if (res.ok) {
+            const data = await res.json();
+            details.push({
+              tokenPrefix: prefix,
+              success: true,
+              guildName: data.guild?.name || '不明なサーバー',
+            });
+          } else {
+            const errData = await res.json().catch(() => ({
+              message: `HTTP ${res.status}`
+            }));
+            details.push({
+              tokenPrefix: prefix,
+              success: false,
+              error: errData.message || `HTTP ${res.status}`,
+            });
+          }
+        } catch (err: any) {
+          details.push({
+            tokenPrefix: prefix,
+            success: false,
+            error: err.message || '接続エラー',
+          });
+        }
+      }
+
+      return NextResponse.json({ details });
+    }
+
+    return NextResponse.json({ error: '無効なアクションです。' }, { status: 400 });
+
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message || 'サーバー内部エラーが発生しました。' }, { status: 500 });
   }
 }
