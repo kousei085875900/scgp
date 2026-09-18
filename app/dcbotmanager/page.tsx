@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 
 type TokenType = 'bot' | 'user';
 
@@ -15,12 +15,11 @@ interface Channel {
   type: number;
 }
 
-interface ExecutionDetail {
-  tokenPrefix: string;
-  success: number;
-  failed: number;
-  lastError?: string;
-  extraInfo?: string;
+interface LogEntry {
+  id: string;
+  timestamp: string;
+  type: 'info' | 'success' | 'error' | 'warn';
+  text: string;
 }
 
 export default function Home() {
@@ -47,10 +46,23 @@ export default function Home() {
   const [isLoadingChannels, setIsLoadingChannels] = useState<boolean>(false);
   const [isSending, setIsSending] = useState<boolean>(false);
 
-  const [statusMessage, setStatusMessage] = useState<string>('');
-  const [executionDetails, setExecutionDetails] = useState<ExecutionDetail[]>([]);
+  // ターミナルログ用ステート
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const terminalEndRef = useRef<HTMLDivElement>(null);
 
   const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  // ログを追加するヘルパー
+  const addLog = (text: string, type: LogEntry['type'] = 'info') => {
+    const now = new Date();
+    const timestamp = now.toTimeString().split(' ')[0] + '.' + String(now.getMilliseconds()).padStart(3, '0');
+    setLogs((prev) => [...prev, { id: Math.random().toString(36).substring(2, 9), timestamp, type, text }]);
+  };
+
+  // ログが追加されたら自動で一番下にスクロール
+  useEffect(() => {
+    terminalEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [logs]);
 
   const getTokens = (): string[] => {
     return tokensInput
@@ -62,27 +74,22 @@ export default function Home() {
   const handleLoadGuilds = async () => {
     const tokens = getTokens();
     if (tokens.length === 0) {
-      setStatusMessage('Error: トークンを入力してください。');
+      addLog('Error: トークンが入力されていません。', 'error');
       return;
     }
 
     setIsLoadingGuilds(true);
-    setStatusMessage(
-      tokens.length > 1
-        ? `${tokens.length}個のトークンで共通のサーバーを検索中...`
-        : 'サーバー一覧を取得中...'
-    );
+    addLog(`${tokens.length}個のトークンでサーバー一覧の取得を開始...`, 'info');
     setGuilds([]);
     setChannels([]);
     setSelectedGuild('');
     setSelectedChannel('');
-    setExecutionDetails([]);
 
     try {
       const res = await fetch('/api/send?action=getGuilds', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tokens, tokenType }),
+        body: JSON.stringify({ tokens, tokenType, spoofBrowser: spoofBrowserHeader }),
       });
 
       const data = await res.json();
@@ -92,14 +99,10 @@ export default function Home() {
 
       if (Array.isArray(data)) {
         setGuilds(data);
-        setStatusMessage(
-          tokens.length > 1
-            ? `全トークン共通のサーバーを ${data.length} 件取得しました`
-            : `サーバーを ${data.length} 件取得しました`
-        );
+        addLog(`SUCCESS: 全トークン共通のサーバーを ${data.length} 件取得しました。`, 'success');
       }
     } catch (err: any) {
-      setStatusMessage(`Error: ${err.message}`);
+      addLog(`Error: ${err.message}`, 'error');
     } finally {
       setIsLoadingGuilds(false);
     }
@@ -114,13 +117,13 @@ export default function Home() {
 
     const tokens = getTokens();
     setIsLoadingChannels(true);
-    setStatusMessage('チャンネル一覧を取得中...');
+    addLog(`選択されたサーバー (ID: ${guildId}) のチャンネル一覧を取得中...`, 'info');
 
     try {
       const res = await fetch('/api/send?action=getChannels', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tokens, tokenType, guildId }),
+        body: JSON.stringify({ tokens, tokenType, guildId, spoofBrowser: spoofBrowserHeader }),
       });
 
       const data = await res.json();
@@ -133,9 +136,9 @@ export default function Home() {
         : [];
 
       setChannels(textChannels);
-      setStatusMessage(`テキストチャンネルを ${textChannels.length} 件取得しました`);
+      addLog(`SUCCESS: テキストチャンネルを ${textChannels.length} 件取得しました。`, 'success');
     } catch (err: any) {
-      setStatusMessage(`Error: ${err.message}`);
+      addLog(`Error: ${err.message}`, 'error');
     } finally {
       setIsLoadingChannels(false);
     }
@@ -145,31 +148,24 @@ export default function Home() {
   const handleSendMessage = async () => {
     const tokens = getTokens();
     if (tokens.length === 0) {
-      setStatusMessage('Error: トークンを入力してください。');
+      addLog('Error: トークンが入力されていません。', 'error');
       return;
     }
     if (!selectedChannel) {
-      setStatusMessage('Error: 送信先のチャンネルを選択してください。');
+      addLog('Error: 送信先のチャンネルが選択されていません。', 'error');
       return;
     }
     if (!message.trim()) {
-      setStatusMessage('Error: メッセージ内容を入力してください。');
+      addLog('Error: メッセージ内容が空です。', 'error');
       return;
     }
 
     setIsSending(true);
-    setStatusMessage('チャンネルごとに異なる間隔（ジッター）を設定して並列送信中...');
-    setExecutionDetails([]);
+    addLog(`メッセージ送信シーケンス開始（回数/トークン: ${count}回, 乱数付与: ${useRandomSuffix ? '有効' : '無効'}）`, 'info');
 
     const targetChannels = selectedChannel === 'ALL'
       ? channels.map((c) => c.id)
       : [selectedChannel];
-
-    const detailsMap: { [prefix: string]: ExecutionDetail } = {};
-    tokens.forEach((t) => {
-      const prefix = t.substring(0, 10) + '...';
-      detailsMap[prefix] = { tokenPrefix: prefix, success: 0, failed: 0 };
-    });
 
     let totalSuccess = 0;
     let totalFailed = 0;
@@ -181,7 +177,6 @@ export default function Home() {
       for (let i = 0; i < count; i++) {
         for (const token of tokens) {
           const prefix = token.substring(0, 10) + '...';
-
           const finalContent = useRandomSuffix
             ? `${message} [${Math.random().toString(36).substring(2, 7)}]`
             : message;
@@ -204,23 +199,21 @@ export default function Home() {
             const data = await res.json();
             if (res.ok && data.details && data.details[0]) {
               const det = data.details[0];
-              detailsMap[prefix].success += det.success;
-              detailsMap[prefix].failed += det.failed;
-              if (det.lastError) detailsMap[prefix].lastError = det.lastError;
-              totalSuccess += det.success;
-              totalFailed += det.failed;
+              if (det.success > 0) {
+                totalSuccess += det.success;
+                addLog(`[Token: ${prefix}] -> Ch: ${channelId} 送信成功 (${i + 1}/${count})`, 'success');
+              } else {
+                totalFailed += det.failed;
+                addLog(`[Token: ${prefix}] -> Ch: ${channelId} 送信失敗: ${det.lastError || 'Unknown'}`, 'error');
+              }
             } else {
-              detailsMap[prefix].failed += 1;
-              detailsMap[prefix].lastError = data.error || '送信失敗';
               totalFailed += 1;
+              addLog(`[Token: ${prefix}] -> Ch: ${channelId} 送信失敗: ${data.error || 'API Error'}`, 'error');
             }
           } catch (err: any) {
-            detailsMap[prefix].failed += 1;
-            detailsMap[prefix].lastError = err.message;
             totalFailed += 1;
+            addLog(`[Token: ${prefix}] ネットワーク例外: ${err.message}`, 'error');
           }
-
-          setExecutionDetails([...Object.values(detailsMap)]);
 
           const channelJitter = (Math.random() * 0.4) - 0.2;
           const actualMin = Math.max(0.1, delayMin + channelJitter);
@@ -235,9 +228,9 @@ export default function Home() {
 
     try {
       await Promise.all(targetChannels.map((chId) => runChannelWorker(chId)));
-      setStatusMessage(`送信完了: 成功 ${totalSuccess} 件 / 失敗 ${totalFailed} 件`);
+      addLog(`=== 送信処理完了 === 成功: ${totalSuccess}件 / 失敗: ${totalFailed}件`, 'info');
     } catch (err: any) {
-      setStatusMessage(`Error: ${err.message}`);
+      addLog(`Error in worker: ${err.message}`, 'error');
     } finally {
       setIsSending(false);
     }
@@ -247,17 +240,16 @@ export default function Home() {
   const handleJoinGuild = async () => {
     const tokens = getTokens();
     if (tokens.length === 0) {
-      setStatusMessage('Error: トークンを入力してください。');
+      addLog('Error: トークンが入力されていません。', 'error');
       return;
     }
     if (!inviteCodeInput.trim()) {
-      setStatusMessage('Error: 招待コードまたはURLを入力してください。');
+      addLog('Error: 招待コードまたはURLが入力されていません。', 'error');
       return;
     }
 
     setIsJoining(true);
-    setStatusMessage('各トークンでサーバーへ参加を試行中...');
-    setExecutionDetails([]);
+    addLog(`招待リンク [${inviteCodeInput}] からサーバーへの参加を試行 (${tokens.length}アカウント)...`, 'info');
 
     try {
       const res = await fetch('/api/send?action=joinGuild', {
@@ -277,18 +269,17 @@ export default function Home() {
       }
 
       if (data.details) {
-        const mappedDetails: ExecutionDetail[] = data.details.map((d: any) => ({
-          tokenPrefix: d.tokenPrefix,
-          success: d.success ? 1 : 0,
-          failed: d.success ? 0 : 1,
-          lastError: d.error,
-          extraInfo: d.guildName ? `参加成功: ${d.guildName}` : undefined,
-        }));
-        setExecutionDetails(mappedDetails);
-        setStatusMessage('サーバー参加プロセスが終了しました。');
+        data.details.forEach((d: any) => {
+          if (d.success) {
+            addLog(`[Token: ${d.tokenPrefix}] 参加成功 ➔ サーバー: ${d.guildName}`, 'success');
+          } else {
+            addLog(`[Token: ${d.tokenPrefix}] 参加失敗 ➔ 理由: ${d.error}`, 'error');
+          }
+        });
+        addLog('=== サーバー参加プロセス終了 ===', 'info');
       }
     } catch (err: any) {
-      setStatusMessage(`Error: ${err.message}`);
+      addLog(`Error: ${err.message}`, 'error');
     } finally {
       setIsJoining(false);
     }
@@ -438,7 +429,7 @@ export default function Home() {
             </select>
           </div>
 
-          {/* 回避設定 */}
+          {/* パラメータ設定 */}
           <div className="p-4 border rounded border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50 space-y-3">
             <div className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
               🛡️ パラメータ設定
@@ -529,7 +520,7 @@ export default function Home() {
             </button>
           </div>
 
-          {/* ⚡ 新規追加：招待リンクからサーバーに参加するセクション */}
+          {/* 招待リンクからサーバーに参加するセクション */}
           <div className="p-4 border rounded border-red-200 dark:border-red-900/50 bg-red-50/20 dark:bg-red-950/10 space-y-3">
             <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
               ⚡ 招待リンクからサーバーに参加
@@ -550,41 +541,43 @@ export default function Home() {
             </button>
           </div>
 
-          {statusMessage && (
-            <div className="p-4 rounded border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-950 text-xs font-mono whitespace-pre-wrap leading-relaxed">
-              {statusMessage}
+          {/* 黒画面のターミナル風ログコンソール */}
+          <div className="space-y-2">
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+                🖥️ 実行コンソールログ
+              </span>
+              {logs.length > 0 && (
+                <button
+                  onClick={() => setLogs([])}
+                  className="text-xs text-red-500 hover:underline"
+                >
+                  ログをクリア
+                </button>
+              )}
             </div>
-          )}
 
-          {executionDetails.length > 0 && (
-            <div className="border rounded p-4 border-gray-200 dark:border-gray-800 space-y-2">
-              <div className="text-xs font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
-                トークンごとの実行詳細
-              </div>
-              <div className="space-y-1.5">
-                {executionDetails.map((detail, idx) => (
-                  <div key={idx} className="text-xs font-mono p-2 rounded bg-gray-100 dark:bg-gray-900 flex justify-between items-center">
-                    <span>トークン: {detail.tokenPrefix}</span>
-                    <span className="gap-2 flex">
-                      {detail.extraInfo ? (
-                        <span className="text-green-600 dark:text-green-400 font-bold">{detail.extraInfo}</span>
-                      ) : (
-                        <>
-                          <span className="text-green-600 dark:text-green-400 font-bold">成功: {detail.success}</span>
-                          <span className="text-red-600 dark:text-red-400 font-bold">失敗: {detail.failed}</span>
-                        </>
-                      )}
-                    </span>
-                    {detail.lastError && (
-                      <span className="text-red-500 max-w-xs truncate" title={detail.lastError}>
-                        ({detail.lastError})
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </div>
+            <div className="w-full h-64 bg-black border border-gray-800 rounded p-3 font-mono text-xs overflow-y-auto space-y-1 shadow-inner select-text">
+              {logs.length === 0 ? (
+                <span className="text-gray-600">system ready... waiting for actions.</span>
+              ) : (
+                logs.map((log) => {
+                  let colorClass = 'text-gray-300';
+                  if (log.type === 'success') colorClass = 'text-green-400 font-semibold';
+                  if (log.type === 'error') colorClass = 'text-red-400 font-semibold';
+                  if (log.type === 'warn') colorClass = 'text-yellow-400';
+
+                  return (
+                    <div key={log.id} className="leading-relaxed break-all">
+                      <span className="text-gray-500 mr-2">[{log.timestamp}]</span>
+                      <span className={colorClass}>{log.text}</span>
+                    </div>
+                  );
+                })
+              )}
+              <div ref={terminalEndRef} />
             </div>
-          )}
+          </div>
         </div>
       </div>
     </div>
