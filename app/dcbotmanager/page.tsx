@@ -20,6 +20,7 @@ interface ExecutionDetail {
   success: number;
   failed: number;
   lastError?: string;
+  extraInfo?: string;
 }
 
 export default function Home() {
@@ -31,6 +32,10 @@ export default function Home() {
   const [selectedChannel, setSelectedChannel] = useState<string>('');
   const [message, setMessage] = useState<string>('');
   const [count, setCount] = useState<number>(1);
+
+  // 招待参加用ステート
+  const [inviteCodeInput, setInviteCodeInput] = useState<string>('');
+  const [isJoining, setIsJoining] = useState<boolean>(false);
 
   // パラメータ設定
   const [useRandomSuffix, setUseRandomSuffix] = useState<boolean>(true);
@@ -136,7 +141,7 @@ export default function Home() {
     }
   };
 
-  // メッセージ送信処理（チャンネルごとに独立したジッター/遅延をもたせた並列送信）
+  // メッセージ送信処理
   const handleSendMessage = async () => {
     const tokens = getTokens();
     if (tokens.length === 0) {
@@ -169,9 +174,7 @@ export default function Home() {
     let totalSuccess = 0;
     let totalFailed = 0;
 
-    // チャンネルごとに独立して実行される送信タスク
     const runChannelWorker = async (channelId: string) => {
-      // 1. 初期タイミングの分散（0〜1500msのランダムずらし）
       const initialOffset = Math.floor(Math.random() * 1500);
       await sleep(initialOffset);
 
@@ -219,8 +222,7 @@ export default function Home() {
 
           setExecutionDetails([...Object.values(detailsMap)]);
 
-          // 2. チャンネルごとに独立したランダム間隔（0.6s〜1.5s + チャンネル固有のゆらぎ）
-          const channelJitter = (Math.random() * 0.4) - 0.2; // -0.2s 〜 +0.2s の微ブレ
+          const channelJitter = (Math.random() * 0.4) - 0.2;
           const actualMin = Math.max(0.1, delayMin + channelJitter);
           const actualMax = Math.max(actualMin, delayMax + channelJitter);
           const waitMs = Math.floor(
@@ -232,7 +234,6 @@ export default function Home() {
     };
 
     try {
-      // 全チャンネルのワーカーを同時に起動（内部でそれぞれずれて動く）
       await Promise.all(targetChannels.map((chId) => runChannelWorker(chId)));
       setStatusMessage(`送信完了: 成功 ${totalSuccess} 件 / 失敗 ${totalFailed} 件`);
     } catch (err: any) {
@@ -242,12 +243,62 @@ export default function Home() {
     }
   };
 
+  // 招待リンク参加処理
+  const handleJoinGuild = async () => {
+    const tokens = getTokens();
+    if (tokens.length === 0) {
+      setStatusMessage('Error: トークンを入力してください。');
+      return;
+    }
+    if (!inviteCodeInput.trim()) {
+      setStatusMessage('Error: 招待コードまたはURLを入力してください。');
+      return;
+    }
+
+    setIsJoining(true);
+    setStatusMessage('各トークンでサーバーへ参加を試行中...');
+    setExecutionDetails([]);
+
+    try {
+      const res = await fetch('/api/send?action=joinGuild', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tokens,
+          tokenType,
+          inviteCode: inviteCodeInput.trim(),
+          spoofBrowser: spoofBrowserHeader,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'サーバー参加処理に失敗しました');
+      }
+
+      if (data.details) {
+        const mappedDetails: ExecutionDetail[] = data.details.map((d: any) => ({
+          tokenPrefix: d.tokenPrefix,
+          success: d.success ? 1 : 0,
+          failed: d.success ? 0 : 1,
+          lastError: d.error,
+          extraInfo: d.guildName ? `参加成功: ${d.guildName}` : undefined,
+        }));
+        setExecutionDetails(mappedDetails);
+        setStatusMessage('サーバー参加プロセスが終了しました。');
+      }
+    } catch (err: any) {
+      setStatusMessage(`Error: ${err.message}`);
+    } finally {
+      setIsJoining(false);
+    }
+  };
+
   const tokensCount = getTokens().length;
 
   return (
     <div className="space-y-8 w-full max-w-3xl mx-auto p-4 sm:p-6 font-sans">
       <div className="space-y-2">
-       
         <h1 className="text-4xl sm:text-6xl font-black text-red-600 tracking-tight leading-tight">
           。<br />
         </h1>
@@ -337,6 +388,7 @@ export default function Home() {
             </button>
           </div>
 
+          {/* サーバー・チャンネル選択セクション */}
           <div>
             <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1 uppercase tracking-wider">
               サーバー選択 {tokensCount > 1 && '(全トークン共通のみ表示)'}
@@ -439,6 +491,7 @@ export default function Home() {
             </div>
           </div>
 
+          {/* メッセージ送信セクション */}
           <div className="space-y-4">
             <div>
               <label className="block text-xs font-bold text-gray-600 dark:text-gray-400 mb-1 uppercase tracking-wider">
@@ -476,6 +529,27 @@ export default function Home() {
             </button>
           </div>
 
+          {/* ⚡ 新規追加：招待リンクからサーバーに参加するセクション */}
+          <div className="p-4 border rounded border-red-200 dark:border-red-900/50 bg-red-50/20 dark:bg-red-950/10 space-y-3">
+            <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+              ⚡ 招待リンクからサーバーに参加
+            </label>
+            <input
+              type="text"
+              className="w-full p-2.5 border rounded border-gray-300 dark:border-gray-800 dark:bg-gray-950 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-red-600"
+              placeholder="例: https://discord.gg/xxxx または xxxx"
+              value={inviteCodeInput}
+              onChange={(e) => setInviteCodeInput(e.target.value)}
+            />
+            <button
+              onClick={handleJoinGuild}
+              disabled={isJoining || tokensCount === 0 || !inviteCodeInput.trim()}
+              className="w-full py-2.5 bg-gray-900 dark:bg-gray-800 text-white font-bold text-sm rounded hover:bg-gray-800 dark:hover:bg-gray-700 active:bg-black disabled:bg-gray-300 dark:disabled:bg-gray-800 transition-colors"
+            >
+              {isJoining ? '参加処理中...' : '指定したトークンでサーバーに参加する'}
+            </button>
+          </div>
+
           {statusMessage && (
             <div className="p-4 rounded border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-950 text-xs font-mono whitespace-pre-wrap leading-relaxed">
               {statusMessage}
@@ -492,8 +566,14 @@ export default function Home() {
                   <div key={idx} className="text-xs font-mono p-2 rounded bg-gray-100 dark:bg-gray-900 flex justify-between items-center">
                     <span>トークン: {detail.tokenPrefix}</span>
                     <span className="gap-2 flex">
-                      <span className="text-green-600 dark:text-green-400 font-bold">成功: {detail.success}</span>
-                      <span className="text-red-600 dark:text-red-400 font-bold">失敗: {detail.failed}</span>
+                      {detail.extraInfo ? (
+                        <span className="text-green-600 dark:text-green-400 font-bold">{detail.extraInfo}</span>
+                      ) : (
+                        <>
+                          <span className="text-green-600 dark:text-green-400 font-bold">成功: {detail.success}</span>
+                          <span className="text-red-600 dark:text-red-400 font-bold">失敗: {detail.failed}</span>
+                        </>
+                      )}
                     </span>
                     {detail.lastError && (
                       <span className="text-red-500 max-w-xs truncate" title={detail.lastError}>
