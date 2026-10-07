@@ -49,7 +49,7 @@ export default function RootLayout({
             <div className="text-xs font-bold text-red-300 uppercase tracking-wider mb-2">tools</div>
             <Link href="/deptest" className="p-2 rounded hover:bg-red-500 transition text-sm">InMemory deployment tool</Link>
             <Link href="/dcbotmanager" className="p-2 rounded hover:bg-red-500 transition text-sm">discord bot manager</Link>
-             <link href="/projects" className="p-2 rounded hover:rg-red-500 rtansition text-sm">filetoimage</link>
+             <link href="/filetoimage" className="p-2 rounded hover:rg-red-500 rtansition text-sm">filetoimage</link>
             <div className="text-xs font-bold text-red-300 uppercase tracking-wider mb-2">ScratchProjects</div>
             <Link href="/projects" className="p-2 rounded hover:bg-red-500 transition text-sm">projects</Link>
            
