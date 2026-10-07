@@ -14,11 +14,13 @@ export default function BinaryImageConverter() {
   const [encodeProgress, setEncodeProgress] = useState('');
 
   // デコード用ステート
-  const [decodeFiles, setDecodeFiles] = useState<FileList | null>(null);
+  const [decodeFiles, setDecodeFiles] = useState<File[] | null>(null);
   const [isDecoding, setIsDecoding] = useState(false);
   const [decodeProgress, setDecodeProgress] = useState('');
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const encodeInputRef = useRef<HTMLInputElement | null>(null);
+  const decodeInputRef = useRef<HTMLInputElement | null>(null);
 
   // 4色の定義 (黒, 赤, 緑, 青)
   const COLOR_MAP = [
@@ -275,11 +277,32 @@ export default function BinaryImageConverter() {
       {/* エンコードセクション */}
       <div className="mb-8 p-4 border rounded shadow-sm">
         <h2 className="text-xl font-semibold mb-2">1. エンコード (ファイル $\rightarrow$ ZIP化された連番画像)</h2>
-        <input 
-          type="file" 
-          onChange={(e) => setEncodeFile(e.target.files ? e.target.files[0] : null)} 
-          className="mb-3 block"
-        />
+        
+        {/* クリックでもドロップでも選べるボックス */}
+        <div 
+          onClick={() => encodeInputRef.current?.click()}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => {
+            e.preventDefault();
+            if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+              setEncodeFile(e.dataTransfer.files[0]);
+            }
+          }}
+          className="border-2 border-dashed border-gray-300 hover:border-blue-500 rounded-lg p-6 text-center cursor-pointer bg-white mb-3 transition"
+        >
+          <input 
+            type="file" 
+            ref={encodeInputRef}
+            onChange={(e) => setEncodeFile(e.target.files ? e.target.files[0] : null)} 
+            className="hidden"
+          />
+          {encodeFile ? (
+            <p className="text-blue-600 font-semibold">選択中: {encodeFile.name}</p>
+          ) : (
+            <p className="text-gray-500">ここをクリックするか、ファイルをドラッグ＆ドロップして選択</p>
+          )}
+        </div>
+
         <button 
           onClick={handleEncode} 
           disabled={!encodeFile || isEncoding}
@@ -293,13 +316,33 @@ export default function BinaryImageConverter() {
       {/* デコードセクション */}
       <div className="p-4 border rounded shadow-sm">
         <h2 className="text-xl font-semibold mb-2">2. デコード (連番画像群 $\rightarrow$ 元ファイル)</h2>
-        <p className="text-xs text-gray-500 mb-2">※ZIPから解凍した連番画像群を選択してアップロードしてください</p>
-        <input 
-          type="file" 
-          multiple 
-          onChange={(e) => setDecodeFiles(e.target.files)} 
-          className="mb-3 block"
-        />
+        
+        {/* クリックでもドロップ（複数可）でも選べるボックス */}
+        <div 
+          onClick={() => decodeInputRef.current?.click()}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => {
+            e.preventDefault();
+            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+              setDecodeFiles(Array.from(e.dataTransfer.files));
+            }
+          }}
+          className="border-2 border-dashed border-gray-300 hover:border-green-500 rounded-lg p-6 text-center cursor-pointer bg-white mb-3 transition"
+        >
+          <input 
+            type="file" 
+            multiple 
+            ref={decodeInputRef}
+            onChange={(e) => setDecodeFiles(e.target.files ? Array.from(e.target.files) : null)} 
+            className="hidden"
+          />
+          {decodeFiles && decodeFiles.length > 0 ? (
+            <p className="text-green-600 font-semibold">{decodeFiles.length}個のファイルを選択中</p>
+          ) : (
+            <p className="text-gray-500">ZIPから解凍した連番画像群をここをクリックして選択、またはドラッグ＆ドロップ</p>
+          )}
+        </div>
+
         <button 
           onClick={handleDecode} 
           disabled={!decodeFiles || decodeFiles.length === 0 || isDecoding}
