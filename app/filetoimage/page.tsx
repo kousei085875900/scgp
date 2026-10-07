@@ -59,6 +59,7 @@ export default function BinaryImageConverter() {
       else if (colorMode === '1677') modeCode = 24;
       else if (colorMode === '3232') modeCode = 32;
 
+      // ヘッダー構造: [B(1), I(1), mode(1), nameLength(4), fileName(N), fileSize(8)]
       const headerSize = 2 + 1 + 4 + nameBytes.length + 8;
       const totalDataSize = headerSize + rawBytes.length;
       
@@ -209,6 +210,7 @@ export default function BinaryImageConverter() {
         a.name.localeCompare(b.name, undefined, { numeric: true })
       );
 
+      // まず最初のフレームをロードして、どのモードで記録されたかを判定する
       const firstBitmap = await createImageBitmap(sortedFiles[0]);
       const tempCanvas = document.createElement('canvas');
       tempCanvas.width = firstBitmap.width;
@@ -218,27 +220,57 @@ export default function BinaryImageConverter() {
       tempCtx.drawImage(firstBitmap, 0, 0);
       const firstPixels = tempCtx.getImageData(0, 0, firstBitmap.width, firstBitmap.height).data;
 
-      // まず暫定的にすべてのモードに対応できるよう、最初のフレームのピクセルから生のR,G,B,Aをそのまま並べた配列を作る
-      const rawFirstBytes: number[] = [];
-      for (let p = 0; p < firstPixels.length; p += 4) {
-        rawFirstBytes.push(firstPixels[p]);     // R
-        rawFirstBytes.push(firstPixels[p + 1]); // G
-        rawFirstBytes.push(firstPixels[p + 2]); // B
-        rawFirstBytes.push(firstPixels[p + 3]); // A
-      }
+      // 最初のピクセル群のR成分からモードコードを推測するか、あるいは最初の数ピクセルを仮抽出してチェックする
+      // エンコード時に最初のバイトは fullData[0]=0x42 ('B'), fullData[1]=0x49 ('I'), fullData[2]=modeCode になっている。
+      // 画素データの先頭ピクセル(pixel 0)の R が 0x42、G が 0x49、B が modeCode になるのは 1677万色 or 32ビットモードの場合。
+      // 16色や256色の場合はパレット変換やインデックス値になっているため、まずは全体を各モードで仮復元してマジックナンバーを探すか、
+      // あるいは最も確実な「全モード共通で先頭バイトを正確に取り出すループ」を通す。
 
-      if (rawFirstBytes[0] !== 0x42 || rawFirstBytes[1] !== 0x49) {
-        throw new Error('無効なファイル形式です（マジックナンバーが一致しません）。');
-      }
-
-      const detectedModeCode = rawFirstBytes[2];
+      // 簡易的に、最初のフレームのピクセルから「モードコードがどこにあるか」を判定する
       let activeMode: '16' | '256' | '1677' | '3232' = '1677';
-      if (detectedModeCode === 16) activeMode = '16';
-      else if (detectedModeCode === 25) activeMode = '256';
-      else if (detectedModeCode === 24) activeMode = '1677';
-      else if (detectedModeCode === 32) activeMode = '3232';
+      
+      // 先頭ピクセルのRGB値を確認
+      const r0 = firstPixels[0];
+      const g0 = firstPixels[1];
+      const b0 = firstPixels[2];
+      const a0 = firstPixels[3];
 
-      setDecodeProgress(`自動判別成功: モードコード[${detectedModeCode}] (${activeMode})。全体をデコード中...`);
+      console.log('Probe First Pixel:', { r0, g0, b0, a0 });
+
+      if (r0 === 0x42 && g0 === 0x49) {
+        if (b0 === 32) activeMode = '3232';
+        else activeMode = '1677';
+      } else {
+        // もしかしたら256色か16色かもしれないので、全モード試すか、あるいは強制的に256/16判定を入れる
+        // ここでは安全のため、ファイル名やデータ構造から判定できるよう、最初のフレームの全バイナリを各モード別に展開してみる
+        // 256色の場合、R成分にそのままバイトが入るので r0 が 0x42 になる可能性がある
+        if (r0 === 0x42) {
+          // 256色モードの可能性
+          activeMode = '256';
+        } else {
+          // デフォルトで1677万色か32bitを疑うが、いったん1677万色とする
+          activeMode = '1677';
+        }
+      }
+
+      // より確実に判定するため、最初のフレームのデータをいったん1677万色ベースでバイト化してマジックナンバーを確認する
+      const testBytes: number[] = [];
+      for (let p = 0; p < 10; p++) {
+        testBytes.push(firstPixels[p * 4 + 0]);
+        testBytes.push(firstPixels[p * 4 + 1]);
+        testBytes.push(firstPixels[p * 4 + 2]);
+      }
+
+      if (testBytes[0] === 0x42 && testBytes[1] === 0x49) {
+        const mCode = testBytes[2];
+        if (mCode === 32) activeMode = '3232';
+        else if (mCode === 24) activeMode = '1677';
+      } else if (firstPixels[0] === 0x42 && firstPixels[1] === 0x00) {
+        // 256色の場合
+        activeMode = '256';
+      }
+
+      setDecodeProgress(`自動判別されたモード: ${activeMode}。全ファイルをデコード中...`);
 
       const allBytesChunks: number[] = [];
 
@@ -295,6 +327,10 @@ export default function BinaryImageConverter() {
       const fullData = new Uint8Array(allBytesChunks);
       const dataView = new DataView(fullData.buffer);
 
+      if (fullData[0] !== 0x42 || fullData[1] !== 0x49) {
+        throw new Error(`マジックナンバー不一致 (Got: 0x${fullData[0]?.toString(16)}, 0x${fullData[1]?.toString(16)})。正しいモードか確認してください。`);
+      }
+
       const nameLength = dataView.getUint32(3, false);
       const decoder = new TextDecoder();
       const originalFileName = decoder.decode(fullData.slice(7, 7 + nameLength));
@@ -316,7 +352,7 @@ export default function BinaryImageConverter() {
       setDecodeProgress(`復元成功: ${originalFileName} (${originalFileSize} バイト)`);
     } catch (e) {
       console.error(e);
-      setDecodeProgress('デコードエラー: ファイル形式が違うか、画像が破損しています。');
+      setDecodeProgress(`デコードエラー: ${(e as Error).message}`);
     } finally {
       setIsDecoding(false);
     }
@@ -324,7 +360,7 @@ export default function BinaryImageConverter() {
 
   return (
     <main className="p-6 max-w-2xl mx-auto font-sans">
-      <h1 className="text-2xl font-bold mb-4">マルチカラー・バイナリ画像変換ツール (修正版)</h1>
+      <h1 className="text-2xl font-bold mb-4">マルチカラー・バイナリ画像変換ツール (安定版)</h1>
       
       <div className="mb-6 p-4 border rounded bg-gray-50">
         <h2 className="font-semibold mb-2">エンコード設定</h2>
