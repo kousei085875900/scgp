@@ -9,16 +9,16 @@ export default function BinaryImageConverter() {
   const [height, setHeight] = useState(360);
   
   // エンコード用ステート
-  const [encodeFile, setEncodeFile] = useState(null);
+  const [encodeFile, setEncodeFile] = useState<File | null>(null);
   const [isEncoding, setIsEncoding] = useState(false);
   const [encodeProgress, setEncodeProgress] = useState('');
 
   // デコード用ステート
-  const [decodeFiles, setDecodeFiles] = useState([]);
+  const [decodeFiles, setDecodeFiles] = useState<FileList | null>(null);
   const [isDecoding, setIsDecoding] = useState(false);
   const [decodeProgress, setDecodeProgress] = useState('');
 
-  const canvasRef = useRef(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // 4色の定義 (黒, 赤, 緑, 青)
   const COLOR_MAP = [
@@ -29,7 +29,7 @@ export default function BinaryImageConverter() {
   ];
 
   // 色から2ビットへの逆変換 (ユークリッド距離が一番近いものを探す)
-  const getClosestColorIndex = (r, g, b) => {
+  const getClosestColorIndex = (r: number, g: number, b: number): number => {
     let minDist = Infinity;
     let bestIndex = 0;
     for (let i = 0; i < COLOR_MAP.length; i++) {
@@ -44,7 +44,7 @@ export default function BinaryImageConverter() {
   };
 
   // ---------------------------------------------------------------------------
-  // エンコード処理 (ファイル -> 連番PNGをZIPにまとめる)
+  // エンコード処理 (ファイル -> ZIP化された連番画像)
   // ---------------------------------------------------------------------------
   const handleEncode = async () => {
     if (!encodeFile) return;
@@ -82,9 +82,11 @@ export default function BinaryImageConverter() {
       setEncodeProgress(`全 ${totalFrames} フレームを生成中...`);
 
       const canvas = canvasRef.current;
+      if (!canvas) return;
       canvas.width = width;
       canvas.height = height;
       const ctx = canvas.getContext('2d');
+      if (!ctx) return;
       const imgData = ctx.createImageData(width, height);
 
       const zip = new JSZip();
@@ -127,11 +129,13 @@ export default function BinaryImageConverter() {
         const frameNumStr = String(f + 1).padStart(4, '0');
         const filename = `frame_${frameNumStr}.png`;
         
-        const blob = await new Promise((resolve) => {
+        const blob: Blob | null = await new Promise((resolve) => {
           canvas.toBlob((b) => resolve(b), 'image/png');
         });
 
-        zip.file(filename, blob);
+        if (blob) {
+          zip.file(filename, blob);
+        }
         setEncodeProgress(`フレーム描画中... (${f + 1} / ${totalFrames})`);
       }
 
@@ -161,7 +165,7 @@ export default function BinaryImageConverter() {
   // デコード処理 (連番PNG群 -> 元ファイル)
   // ---------------------------------------------------------------------------
   const handleDecode = async () => {
-    if (decodeFiles.length === 0) return;
+    if (!decodeFiles || decodeFiles.length === 0) return;
     setIsDecoding(true);
     setDecodeProgress('ファイルを並べ替えて読み込み中...');
 
@@ -170,7 +174,7 @@ export default function BinaryImageConverter() {
         a.name.localeCompare(b.name, undefined, { numeric: true })
       );
 
-      let allBytesChunks = [];
+      const allBytesChunks: number[] = [];
 
       for (let i = 0; i < sortedFiles.length; i++) {
         setDecodeProgress(`フレーム読み込み中... (${i + 1} / ${sortedFiles.length})`);
@@ -181,12 +185,13 @@ export default function BinaryImageConverter() {
         canvas.width = bitmap.width;
         canvas.height = bitmap.height;
         const ctx = canvas.getContext('2d');
+        if (!ctx) continue;
         ctx.drawImage(bitmap, 0, 0);
         
         const imgData = ctx.getImageData(0, 0, bitmap.width, bitmap.height);
         const pixels = imgData.data;
 
-        const frameBytes = [];
+        const frameBytes: number[] = [];
         for (let p = 0; p < pixels.length; p += 4) {
           const r = pixels[p];
           const g = pixels[p + 1];
@@ -272,7 +277,7 @@ export default function BinaryImageConverter() {
         <h2 className="text-xl font-semibold mb-2">1. エンコード (ファイル $\rightarrow$ ZIP化された連番画像)</h2>
         <input 
           type="file" 
-          onChange={(e) => setEncodeFile(e.target.files[0])} 
+          onChange={(e) => setEncodeFile(e.target.files ? e.target.files[0] : null)} 
           className="mb-3 block"
         />
         <button 
@@ -297,7 +302,7 @@ export default function BinaryImageConverter() {
         />
         <button 
           onClick={handleDecode} 
-          disabled={decodeFiles.length === 0 || isDecoding}
+          disabled={!decodeFiles || decodeFiles.length === 0 || isDecoding}
           className="bg-green-600 text-white px-4 py-2 rounded disabled:bg-gray-400"
         >
           {isDecoding ? 'デコード中...' : '画像を結合してファイルを復元'}
