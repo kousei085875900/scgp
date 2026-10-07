@@ -59,7 +59,6 @@ export default function BinaryImageConverter() {
       else if (colorMode === '1677') modeCode = 24;
       else if (colorMode === '3232') modeCode = 32;
 
-      // ヘッダー構造: [B(1), I(1), mode(1), nameLength(4), fileName(N), fileSize(8)]
       const headerSize = 2 + 1 + 4 + nameBytes.length + 8;
       const totalDataSize = headerSize + rawBytes.length;
       
@@ -210,7 +209,6 @@ export default function BinaryImageConverter() {
         a.name.localeCompare(b.name, undefined, { numeric: true })
       );
 
-      // まず最初のフレームをロードして、どのモードで記録されたかを判定する
       const firstBitmap = await createImageBitmap(sortedFiles[0]);
       const tempCanvas = document.createElement('canvas');
       tempCanvas.width = firstBitmap.width;
@@ -220,40 +218,24 @@ export default function BinaryImageConverter() {
       tempCtx.drawImage(firstBitmap, 0, 0);
       const firstPixels = tempCtx.getImageData(0, 0, firstBitmap.width, firstBitmap.height).data;
 
-      // 最初のピクセル群のR成分からモードコードを推測するか、あるいは最初の数ピクセルを仮抽出してチェックする
-      // エンコード時に最初のバイトは fullData[0]=0x42 ('B'), fullData[1]=0x49 ('I'), fullData[2]=modeCode になっている。
-      // 画素データの先頭ピクセル(pixel 0)の R が 0x42、G が 0x49、B が modeCode になるのは 1677万色 or 32ビットモードの場合。
-      // 16色や256色の場合はパレット変換やインデックス値になっているため、まずは全体を各モードで仮復元してマジックナンバーを探すか、
-      // あるいは最も確実な「全モード共通で先頭バイトを正確に取り出すループ」を通す。
-
-      // 簡易的に、最初のフレームのピクセルから「モードコードがどこにあるか」を判定する
-      let activeMode: '16' | '256' | '1677' | '3232' = '1677';
-      
-      // 先頭ピクセルのRGB値を確認
       const r0 = firstPixels[0];
       const g0 = firstPixels[1];
       const b0 = firstPixels[2];
-      const a0 = firstPixels[3];
 
-      console.log('Probe First Pixel:', { r0, g0, b0, a0 });
+      // 型を明示的に指定して宣言
+      let activeMode: '16' | '256' | '1677' | '3232' = '1677';
 
       if (r0 === 0x42 && g0 === 0x49) {
         if (b0 === 32) activeMode = '3232';
         else activeMode = '1677';
       } else {
-        // もしかしたら256色か16色かもしれないので、全モード試すか、あるいは強制的に256/16判定を入れる
-        // ここでは安全のため、ファイル名やデータ構造から判定できるよう、最初のフレームの全バイナリを各モード別に展開してみる
-        // 256色の場合、R成分にそのままバイトが入るので r0 が 0x42 になる可能性がある
         if (r0 === 0x42) {
-          // 256色モードの可能性
           activeMode = '256';
         } else {
-          // デフォルトで1677万色か32bitを疑うが、いったん1677万色とする
           activeMode = '1677';
         }
       }
 
-      // より確実に判定するため、最初のフレームのデータをいったん1677万色ベースでバイト化してマジックナンバーを確認する
       const testBytes: number[] = [];
       for (let p = 0; p < 10; p++) {
         testBytes.push(firstPixels[p * 4 + 0]);
@@ -265,8 +247,9 @@ export default function BinaryImageConverter() {
         const mCode = testBytes[2];
         if (mCode === 32) activeMode = '3232';
         else if (mCode === 24) activeMode = '1677';
+        else if (mCode === 16) activeMode = '16';
+        else if (mCode === 25) activeMode = '256';
       } else if (firstPixels[0] === 0x42 && firstPixels[1] === 0x00) {
-        // 256色の場合
         activeMode = '256';
       }
 
@@ -360,7 +343,7 @@ export default function BinaryImageConverter() {
 
   return (
     <main className="p-6 max-w-2xl mx-auto font-sans">
-      <h1 className="text-2xl font-bold mb-4">マルチカラー・バイナリ画像変換ツール (安定版)</h1>
+      <h1 className="text-2xl font-bold mb-4">マルチカラー・バイナリ画像変換ツール (型修正版)</h1>
       
       <div className="mb-6 p-4 border rounded bg-gray-50">
         <h2 className="font-semibold mb-2">エンコード設定</h2>
