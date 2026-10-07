@@ -7,7 +7,7 @@ export default function BinaryImageConverter() {
   // 設定ステート
   const [width, setWidth] = useState(640);
   const [height, setHeight] = useState(360);
-  const [colorMode, setColorMode] = useState<'16' | '256' | '1677'>('1677');
+  const [colorMode, setColorMode] = useState<'16' | '256' | '1677' | '3232'>('3232');
   
   // エンコード用ステート
   const [encodeFile, setEncodeFile] = useState<File | null>(null);
@@ -57,13 +57,15 @@ export default function BinaryImageConverter() {
       const arrayBuffer = await encodeFile.arrayBuffer();
       const rawBytes = new Uint8Array(arrayBuffer);
 
-      // メタデータヘッダーの構築
-      // 構造: [マジック: 'BI' (2Bytes)] + [モード: 16|25,jis-num? -> 1Byte(16, 25, 24)] + [ファイル名長(4Bytes)] + [ファイル名] + [実データサイズ(8Bytes)] + [実データ]
       const encoder = new TextEncoder();
       const nameBytes = encoder.encode(encodeFile.name);
       
-      // モード番号の決定 (16: 16色, 25: 256色(安全のため25とする), 24: 1677万色)
-      const modeCode = colorMode === '16' ? 16 : colorMode === '256' ? 25 : 24;
+      // モードコードの定義 (16: 16色, 25: 256色, 24: 1677万色, 32: 32ビットRGBA)
+      let modeCode = 24;
+      if (colorMode === '16') modeCode = 16;
+      else if (colorMode === '256') modeCode = 25;
+      else if (colorMode === '1677') modeCode = 24;
+      else if (colorMode === '3232') modeCode = 32;
 
       const headerSize = 2 + 1 + 4 + nameBytes.length + 8;
       const totalDataSize = headerSize + rawBytes.length;
@@ -89,11 +91,13 @@ export default function BinaryImageConverter() {
       const pixelsPerFrame = width * height;
       let bytesPerFrame = 0;
       if (colorMode === '16') {
-        bytesPerFrame = Math.floor(pixelsPerFrame * 4 / 8); // 1pixel = 4bit (2pixelで1byte)
+        bytesPerFrame = Math.floor(pixelsPerFrame * 4 / 8);
       } else if (colorMode === '256') {
-        bytesPerFrame = pixelsPerFrame * 1; // 1pixel = 8bit (1byte)
-      } else {
-        bytesPerFrame = pixelsPerFrame * 3; // 1pixel = 24bit (3bytes)
+        bytesPerFrame = pixelsPerFrame * 1;
+      } else if (colorMode === '1677') {
+        bytesPerFrame = pixelsPerFrame * 3;
+      } else if (colorMode === '3232') {
+        bytesPerFrame = pixelsPerFrame * 4; // 1pixel = R, G, B, A の4バイト
       }
 
       const totalFrames = Math.ceil(fullData.length / bytesPerFrame);
@@ -134,14 +138,13 @@ export default function BinaryImageConverter() {
         } else if (colorMode === '256') {
           for (let i = 0; i < frameChunk.length; i++) {
             const val = frameChunk[i];
-            // グレイスケールやインデックスカラー表現 (簡易的にR=G=B=valとするか、WebSafe風にするが、8bitそのままRGBに割り当てる)
             imgData.data[pixelIndex * 4 + 0] = val;
             imgData.data[pixelIndex * 4 + 1] = val;
             imgData.data[pixelIndex * 4 + 2] = val;
             imgData.data[pixelIndex * 4 + 3] = 255;
             pixelIndex++;
           }
-        } else {
+        } else if (colorMode === '1677') {
           for (let i = 0; i < frameChunk.length; i += 3) {
             const r = frameChunk[i];
             const g = i + 1 < frameChunk.length ? frameChunk[i + 1] : 0;
@@ -151,6 +154,19 @@ export default function BinaryImageConverter() {
             imgData.data[pixelIndex * 4 + 1] = g;
             imgData.data[pixelIndex * 4 + 2] = b;
             imgData.data[pixelIndex * 4 + 3] = 255;
+            pixelIndex++;
+          }
+        } else if (colorMode === '3232') {
+          for (let i = 0; i < frameChunk.length; i += 4) {
+            const r = frameChunk[i];
+            const g = i + 1 < frameChunk.length ? frameChunk[i + 1] : 0;
+            const b = i + 2 < frameChunk.length ? frameChunk[i + 2] : 0;
+            const a = i + 3 < frameChunk.length ? frameChunk[i + 3] : 255;
+
+            imgData.data[pixelIndex * 4 + 0] = r;
+            imgData.data[pixelIndex * 4 + 1] = g;
+            imgData.data[pixelIndex * 4 + 2] = b;
+            imgData.data[pixelIndex * 4 + 3] = a; // 透過度もデータとして直書き
             pixelIndex++;
           }
         }
@@ -212,7 +228,6 @@ export default function BinaryImageConverter() {
         a.name.localeCompare(b.name, undefined, { numeric: true })
       );
 
-      // まず最初のフレームだけ先に読み込んで「モードフラグ」を自動判別する
       const firstBitmap = await createImageBitmap(sortedFiles[0]);
       const tempCanvas = document.createElement('canvas');
       tempCanvas.width = firstBitmap.width;
@@ -222,10 +237,7 @@ export default function BinaryImageConverter() {
       tempCtx.drawImage(firstBitmap, 0, 0);
       const firstPixels = tempCtx.getImageData(0, 0, firstBitmap.width, firstBitmap.height).data;
 
-      // ヘッダー先頭部分を暫定復元してモードを特定する
-      // 最初の数ピクセルからマジックナンバーとモードコードを読み出す
       const probeBytes: number[] = [];
-      // 16bit(2) + 1bit(1) + 4bit(4) = 最低7バイト分の生データを取るため、全モード共通のフルカラーまたは256色ベースで最初の数ピクセルを仮抽出
       for (let p = 0; p < 10; p++) {
         probeBytes.push(firstPixels[p * 4 + 0]);
         probeBytes.push(firstPixels[p * 4 + 1]);
@@ -233,21 +245,22 @@ export default function BinaryImageConverter() {
       }
 
       if (probeBytes[0] !== 0x42 || probeBytes[1] !== 0x49) {
-        throw new Error('無効なファイル形式です（マジックナンバーが一致しません）。このツールで生成された画像ではありません。');
+        throw new Error('無効なファイル形式です（マジックナンバーが一致しません）。');
       }
 
       const detectedModeCode = probeBytes[2];
-      let activeMode: '16' | '256' | '1677' = '1677';
+      let activeMode: '16' | '256' | '1677' | '3232' = '1677';
       if (detectedModeCode === 16) activeMode = '16';
       else if (detectedModeCode === 25) activeMode = '256';
-      else activeMode = '1677';
+      else if (detectedModeCode === 24) activeMode = '1677';
+      else if (detectedModeCode === 32) activeMode = '3232';
 
-      setDecodeProgress(`自動判別成功: ${activeMode === '16' ? '16色' : activeMode === '256' ? '256色' : '1677万色'} モード。全体をデコード中...`);
+      setDecodeProgress(`自動判別成功: ${activeMode === '3232' ? '32ビットRGBA' : activeMode} モード。全体をデコード中...`);
 
       const allBytesChunks: number[] = [];
 
       for (let i = 0; i < sortedFiles.length; i++) {
-        setDecodeProgress(`フレーム読み込み中 (${activeMode}mode)... (${i + 1} / ${sortedFiles.length})`);
+        setDecodeProgress(`フレーム読み込み中 (${activeMode})... (${i + 1} / ${sortedFiles.length})`);
         const file = sortedFiles[i];
         
         const bitmap = await createImageBitmap(file);
@@ -278,14 +291,20 @@ export default function BinaryImageConverter() {
           }
         } else if (activeMode === '256') {
           for (let p = 0; p < pixels.length; p += 4) {
-            // 256色モードはR成分をそのまま1バイトとして扱う
             allBytesChunks.push(pixels[p]);
           }
-        } else {
+        } else if (activeMode === '1677') {
           for (let p = 0; p < pixels.length; p += 4) {
             allBytesChunks.push(pixels[p]);     // R
             allBytesChunks.push(pixels[p + 1]); // G
             allBytesChunks.push(pixels[p + 2]); // B
+          }
+        } else if (activeMode === '3232') {
+          for (let p = 0; p < pixels.length; p += 4) {
+            allBytesChunks.push(pixels[p]);     // R
+            allBytesChunks.push(pixels[p + 1]); // G
+            allBytesChunks.push(pixels[p + 2]); // B
+            allBytesChunks.push(pixels[p + 3]); // A
           }
         }
       }
@@ -293,7 +312,6 @@ export default function BinaryImageConverter() {
       const fullData = new Uint8Array(allBytesChunks);
       const dataView = new DataView(fullData.buffer);
 
-      // ヘッダーパース (マジック2 + モード1 = 3バイトスキップ)
       const nameLength = dataView.getUint32(3, false);
       const decoder = new TextDecoder();
       const originalFileName = decoder.decode(fullData.slice(7, 7 + nameLength));
@@ -312,7 +330,7 @@ export default function BinaryImageConverter() {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      setDecodeProgress(`復元成功: ${originalFileName} (${originalFileSize} バイト) [${activeMode}色モード]`);
+      setDecodeProgress(`復元成功: ${originalFileName} (${originalFileSize} バイト)`);
     } catch (e) {
       console.error(e);
       setDecodeProgress('デコードエラー: ファイル形式が違うか、画像が破損しています。');
@@ -323,7 +341,7 @@ export default function BinaryImageConverter() {
 
   return (
     <main className="p-6 max-w-2xl mx-auto font-sans">
-      <h1 className="text-2xl font-bold mb-4">マルチカラー・バイナリ画像変換ツール</h1>
+      <h1 className="text-2xl font-bold mb-4">マルチカラー・バイナリ画像変換ツール (32bit RGBA対応)</h1>
       
       {/* 設定エリア */}
       <div className="mb-6 p-4 border rounded bg-gray-50">
@@ -331,36 +349,22 @@ export default function BinaryImageConverter() {
         
         <div className="mb-4">
           <label className="block text-sm font-medium mb-1">カラーモード:</label>
-          <div className="flex gap-4">
+          <div className="grid grid-cols-2 gap-2">
             <label className="flex items-center gap-1 cursor-pointer">
-              <input 
-                type="radio" 
-                name="colorMode" 
-                value="16" 
-                checked={colorMode === '16'} 
-                onChange={() => setColorMode('16')} 
-              />
-              16色 (4bit/pixel)
+              <input type="radio" name="colorMode" value="16" checked={colorMode === '16'} onChange={() => setColorMode('16')} />
+              16色 (4bit)
             </label>
             <label className="flex items-center gap-1 cursor-pointer">
-              <input 
-                type="radio" 
-                name="colorMode" 
-                value="256" 
-                checked={colorMode === '256'} 
-                onChange={() => setColorMode('256')} 
-              />
-              256色 (8bit/pixel)
+              <input type="radio" name="colorMode" value="256" checked={colorMode === '256'} onChange={() => setColorMode('256')} />
+              256色 (8bit)
             </label>
             <label className="flex items-center gap-1 cursor-pointer">
-              <input 
-                type="radio" 
-                name="colorMode" 
-                value="1677" 
-                checked={colorMode === '1677'} 
-                onChange={() => setColorMode('1677')} 
-              />
-              1677万色 (24bit/pixel)
+              <input type="radio" name="colorMode" value="1677" checked={colorMode === '1677'} onChange={() => setColorMode('1677')} />
+              1677万色 (24bit RGB)
+            </label>
+            <label className="flex items-center gap-1 cursor-pointer font-semibold text-blue-600">
+              <input type="radio" name="colorMode" value="3232" checked={colorMode === '3232'} onChange={() => setColorMode('3232')} />
+              32ビット (32bit RGBA) 🚀
             </label>
           </div>
         </div>
@@ -368,23 +372,11 @@ export default function BinaryImageConverter() {
         <div className="flex gap-4 items-center">
           <label>
             横幅 (Width):
-            <input 
-              type="number" 
-              value={width} 
-              onChange={(e) => setWidth(Number(e.target.value))} 
-              className="ml-2 p-1 border rounded w-24"
-              step="1"
-            />
+            <input type="number" value={width} onChange={(e) => setWidth(Number(e.target.value))} className="ml-2 p-1 border rounded w-24" />
           </label>
           <label>
             縦幅 (Height):
-            <input 
-              type="number" 
-              value={height} 
-              onChange={(e) => setHeight(Number(e.target.value))} 
-              className="ml-2 p-1 border rounded w-24"
-              step="1"
-            />
+            <input type="number" value={height} onChange={(e) => setHeight(Number(e.target.value))} className="ml-2 p-1 border rounded w-24" />
           </label>
         </div>
       </div>
@@ -403,32 +395,18 @@ export default function BinaryImageConverter() {
           }}
           className="border-2 border-dashed border-gray-300 hover:border-blue-500 rounded-lg p-6 text-center cursor-pointer bg-white mb-3 transition"
         >
-          <input 
-            type="file" 
-            ref={encodeInputRef}
-            onChange={(e) => setEncodeFile(e.target.files ? e.target.files[0] : null)} 
-            className="hidden"
-          />
-          {encodeFile ? (
-            <p className="text-blue-600 font-semibold">選択中: {encodeFile.name}</p>
-          ) : (
-            <p className="text-gray-500">ファイルをドロップ、またはクリックして選択</p>
-          )}
+          <input type="file" ref={encodeInputRef} onChange={(e) => setEncodeFile(e.target.files ? e.target.files[0] : null)} className="hidden" />
+          {encodeFile ? <p className="text-blue-600 font-semibold">選択中: {encodeFile.name}</p> : <p className="text-gray-500">ファイルをドロップ、またはクリックして選択</p>}
         </div>
-        <button 
-          onClick={handleEncode} 
-          disabled={!encodeFile || isEncoding}
-          className="bg-blue-600 text-white px-4 py-2 rounded disabled:bg-gray-400"
-        >
+        <button onClick={handleEncode} disabled={!encodeFile || isEncoding} className="bg-blue-600 text-white px-4 py-2 rounded disabled:bg-gray-400">
           {isEncoding ? '処理中...' : 'ZIP画像を生成してダウンロード'}
         </button>
         {encodeProgress && <p className="mt-2 text-sm text-blue-700">{encodeProgress}</p>}
       </div>
 
-      {/* デコードセクション（自動判別） */}
+      {/* デコードセクション */}
       <div className="p-4 border rounded shadow-sm">
         <h2 className="text-xl font-semibold mb-2">2. デコード（モード自動判別）</h2>
-        <p className="text-xs text-gray-500 mb-2">※モードを手動で選ぶ必要はありません。画像群をそのまま選択してください。</p>
         <div 
           onClick={() => decodeInputRef.current?.click()}
           onDragOver={(e) => e.preventDefault()}
@@ -440,24 +418,10 @@ export default function BinaryImageConverter() {
           }}
           className="border-2 border-dashed border-gray-300 hover:border-green-500 rounded-lg p-6 text-center cursor-pointer bg-white mb-3 transition"
         >
-          <input 
-            type="file" 
-            multiple 
-            ref={decodeInputRef}
-            onChange={(e) => setDecodeFiles(e.target.files ? Array.from(e.target.files) : null)} 
-            className="hidden"
-          />
-          {decodeFiles && decodeFiles.length > 0 ? (
-            <p className="text-green-600 font-semibold">{decodeFiles.length}個のファイルを選択中</p>
-          ) : (
-            <p className="text-gray-500">変換された画像群をドロップ、またはクリックして選択</p>
-          )}
+          <input type="file" multiple ref={decodeInputRef} onChange={(e) => setDecodeFiles(e.target.files ? Array.from(e.target.files) : null)} className="hidden" />
+          {decodeFiles && decodeFiles.length > 0 ? <p className="text-green-600 font-semibold">{decodeFiles.length}個のファイルを選択中</p> : <p className="text-gray-500">変換された画像群をドロップ、またはクリックして選択</p>}
         </div>
-        <button 
-          onClick={handleDecode} 
-          disabled={!decodeFiles || decodeFiles.length === 0 || isDecoding}
-          className="bg-green-600 text-white px-4 py-2 rounded disabled:bg-gray-400"
-        >
+        <button onClick={handleDecode} disabled={!decodeFiles || decodeFiles.length === 0 || isDecoding} className="bg-green-600 text-white px-4 py-2 rounded disabled:bg-gray-400">
           {isDecoding ? 'デコード中...' : '自動判別してファイルを復元'}
         </button>
         {decodeProgress && <p className="mt-2 text-sm text-green-700">{decodeProgress}</p>}
