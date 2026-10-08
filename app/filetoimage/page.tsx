@@ -202,22 +202,59 @@ export default function BinaryImageConverter() {
       tempCtx.drawImage(firstBitmap, 0, 0);
       const firstPixels = tempCtx.getImageData(0, 0, firstBitmap.width, firstBitmap.height).data;
 
+      // 各モードで仮デコードしてみて、先頭に 'BI' (0x42, 0x49) が正確に出現するモードを総当たりで自動検出する
       let activeMode: '16' | '256' | '1677' = '1677';
+      let detectedBytes: number[] = [];
 
-      const testBytes: number[] = [];
-      for (let p = 0; p < 10; p++) {
-        testBytes.push(firstPixels[p * 4 + 0]);
-        testBytes.push(firstPixels[p * 4 + 1]);
-        testBytes.push(firstPixels[p * 4 + 2]);
+      const tryDecodeBytes = (mode: '16' | '256' | '1677', pixels: Uint8ClampedArray) => {
+        const bytes: number[] = [];
+        if (mode === '16') {
+          const frameNibbles: number[] = [];
+          for (let p = 0; p < Math.min(pixels.length, 100); p += 4) {
+            const r = pixels[p];
+            const g = pixels[p + 1];
+            const b = pixels[p + 2];
+            const nIndex = getClosestColorIndex16(r, g, b);
+            frameNibbles.push(nIndex);
+            if (frameNibbles.length === 2) {
+              bytes.push((frameNibbles[0] << 4) | frameNibbles[1]);
+              frameNibbles.length = 0;
+            }
+          }
+        } else if (mode === '256') {
+          for (let p = 0; p < Math.min(pixels.length, 50); p += 4) {
+            bytes.push(pixels[p]);
+          }
+        } else if (mode === '1677') {
+          for (let p = 0; p < Math.min(pixels.length, 50); p += 4) {
+            bytes.push(pixels[p]);
+            bytes.push(pixels[p + 1]);
+            bytes.push(pixels[p + 2]);
+          }
+        }
+        return bytes;
+      };
+
+      // モード候補を順番にテスト
+      const modes: ('16' | '256' | '1677')[] = ['1677', '256', '16'];
+      let found = false;
+
+      for (const m of modes) {
+        const testB = tryDecodeBytes(m, firstPixels);
+        if (testB.length >= 3 && testB[0] === 0x42 && testB[1] === 0x49) {
+          activeMode = m;
+          found = true;
+          break;
+        }
       }
 
-      if (testBytes[0] === 0x42 && testBytes[1] === 0x49) {
-        const mCode = testBytes[2];
-        if (mCode === 24) activeMode = '1677';
-        else if (mCode === 16) activeMode = '16';
-        else if (mCode === 25) activeMode = '256';
-      } else if (firstPixels[0] === 0x42 && firstPixels[1] === 0x00) {
-        activeMode = '256';
+      if (!found) {
+        // 見つからない場合はモードコードバイトを直接確認するフォールバック
+        if (firstPixels[0] === 0x42 && firstPixels[1] === 0x49) {
+          activeMode = '1677';
+        } else {
+          throw new Error('マジックナンバーが見つかりません。ファイルやカラーモードが異なる可能性があります。');
+        }
       }
 
       setDecodeProgress(`自動判別されたモード: ${activeMode}。全ファイルをデコード中...`);
@@ -305,7 +342,7 @@ export default function BinaryImageConverter() {
     <main className="p-6 max-w-2xl mx-auto font-sans">
       <h1 className="text-2xl font-bold mb-4">マルチカラー・バイナリ画像変換ツール</h1>
       
-      <div className="mb-6 p-4 border rounded">
+      <div className="mb-6 p-4 border rounded bg-gray-50">
         <h2 className="font-semibold mb-2">エンコード設定</h2>
         
         <div className="mb-4">
