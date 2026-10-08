@@ -305,7 +305,7 @@ export default function BinaryImageConverter() {
     <main className="p-6 max-w-2xl mx-auto font-sans">
       <h1 className="text-2xl font-bold mb-4">マルチカラー・バイナリ画像変換ツール</h1>
       
-      <div className="mb-6 p-4 border rounded bg-gray-50">
+      <div className="mb-6 p-4 border rounded">
         <h2 className="font-semibold mb-2">エンコード設定</h2>
         
         <div className="mb-4">
