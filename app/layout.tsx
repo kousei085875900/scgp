@@ -7,7 +7,7 @@ import Link from 'next/link'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Expancoov Project Portal',
+  title: 'Studio Cyvas Group Project',
   description: 'SCGP Portal Site',
 }
 
