@@ -337,6 +337,10 @@ export default function BinaryImageConverter() {
   return (
     <main className="p-6 max-w-2xl mx-auto font-sans min-h-screen bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 transition-colors">
       <h1 className="text-2xl font-bold mb-4">マルチカラー・バイナリ画像変換ツール</h1>
+
+      　<a href="https://github.com/kousei085875900/BinaryImageConverter" target="_blank" rel="noopener noreferrer"className="text-blue-500 hover:underline">
+  　　　　アプリケーション版はこちら
+　　　　</a>
       
       <div className="mb-6 p-4 border border-gray-200 dark:border-gray-800 rounded bg-gray-50 dark:bg-gray-900">
         <h2 className="font-semibold mb-2 text-gray-800 dark:text-gray-200">エンコード設定</h2>
