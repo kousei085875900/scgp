@@ -299,7 +299,7 @@ export default function Home() {
 
       <div className="space-y-6">
         <h2 className="text-2xl sm:text-3xl font-black text-gray-900 dark:text-white tracking-tight">
-          Discord token manager
+          Doscord
         </h2>
 
         <div className="space-y-2 p-4 border border-red-200 bg-red-50 dark:bg-red-950/30 dark:border-red-900/50 rounded">
