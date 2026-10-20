@@ -65,7 +65,7 @@ export default function Home() {
     terminalEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [logs]);
 
-  // バックエンド（server.js）から定期的にGatewayログを同期するポーリング
+  // バックエンドから定期的にGatewayログを同期するポーリング
   useEffect(() => {
     const interval = setInterval(async () => {
       try {
@@ -77,18 +77,17 @@ export default function Home() {
         if (res.ok) {
           const data = await res.json();
           if (data.logs && Array.isArray(data.logs)) {
-            // サーバー側のログをそのままUIログに 매핑 (重複防ぐため必要なら調整、今回はそのまま同期)
             const mapped: LogEntry[] = data.logs.map((l: any) => ({
               id: l.id,
               timestamp: l.timestamp,
               type: l.type,
               text: `[WSS] ${l.text}`,
             }));
-            // ローカルの操作ログとWSSログを合成する場合はここで調整可能
+            setLogs(mapped);
           }
         }
       } catch (e) {
-        // サーバーがカスタムサーバーモードでない場合のサイレント無視
+        // サイレント無視
       }
     }, 2000);
 
@@ -119,7 +118,7 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'connect',
-          token: tokens[0], // 先頭のトークンを使用
+          token: tokens[0],
           tokenType,
         }),
       });
