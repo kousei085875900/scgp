@@ -1,41 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// 最新の仕様に合わせたブラウザ模倣およびX-Super-Propertiesヘッダー構築関数
-function buildHeaders(token: string, tokenType: 'bot' | 'user', spoofBrowser: boolean = true) {
+// 最小限でクリーンなヘッダー構築関数
+function buildHeaders(token: string, tokenType: 'bot' | 'user') {
   const headers: Record<string, string> = {
-    'Authorization': tokenType === 'bot' ? `Bot ${token}` : token,
     'Content-Type': 'application/json',
   };
 
-  if (spoofBrowser) {
+  if (tokenType === 'bot') {
+    headers['Authorization'] = `Bot ${token}`;
+  } else {
+    headers['Authorization'] = token;
+    // ユーザートークンの最低限のUAのみ（プロパティや不審なヘッダーは排除）
     headers['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
-    
-    headers['X-Super-Properties'] = Buffer.from(
-      JSON.stringify({
-        os: 'Windows',
-        browser: 'Chrome',
-        device: '',
-        system_locale: 'ja',
-        browser_user_agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-        browser_version: '124.0.0.0',
-        os_version: '10',
-        referrer: '',
-        referring_domain: '',
-        referrer_current: '',
-        referring_domain_current: '',
-        release_channel: 'stable',
-        client_build_number: 305412,
-        client_event_source: null,
-      })
-    ).toString('base64');
-
-    headers['Sec-Ch-Ua'] = '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"';
-    headers['Sec-Ch-Ua-Mobile'] = '?0';
-    headers['Sec-Ch-Ua-Platform'] = '"Windows"';
-    headers['Sec-Fetch-Site'] = 'same-origin';
-    headers['Sec-Fetch-Mode'] = 'cors';
-    headers['Sec-Fetch-Dest'] = 'empty';
-    headers['Accept-Language'] = 'ja,en-US;q=0.9,en;q=0.8';
   }
 
   return headers;
@@ -45,13 +21,13 @@ export async function POST(req: NextRequest) {
   try {
     const action = req.nextUrl.searchParams.get('action');
     const body = await req.json();
-    const { tokens, tokenType = 'bot', guildId, channelId, content, count = 1, spoofBrowser = true } = body;
+    const { tokens, tokenType = 'bot', guildId, channelId, content, count = 1 } = body;
 
     if (!tokens || !Array.isArray(tokens) || tokens.length === 0) {
       return NextResponse.json({ error: '有効なトークンが指定されていません。' }, { status: 400 });
     }
 
-    // 1. サーバー一覧の取得（複数トークンの場合は共通のサーバーを抽出）
+    // 1. サーバー一覧の取得
     if (action === 'getGuilds') {
       const guildSets: Set<string>[] = [];
       const guildMap = new Map<string, { id: string; name: string }>();
@@ -59,7 +35,7 @@ export async function POST(req: NextRequest) {
       for (const token of tokens) {
         const res = await fetch('https://discord.com/api/v10/users/@me/guilds', {
           method: 'GET',
-          headers: buildHeaders(token, tokenType, spoofBrowser),
+          headers: buildHeaders(token, tokenType),
         });
 
         if (!res.ok) {
@@ -93,7 +69,7 @@ export async function POST(req: NextRequest) {
 
       const res = await fetch(`https://discord.com/api/v10/guilds/${guildId}/channels`, {
         method: 'GET',
-        headers: buildHeaders(tokens[0], tokenType, spoofBrowser),
+        headers: buildHeaders(tokens[0], tokenType),
       });
 
       if (!res.ok) {
@@ -123,7 +99,7 @@ export async function POST(req: NextRequest) {
           try {
             const res = await fetch(`https://discord.com/api/v10/channels/${channelId}/messages`, {
               method: 'POST',
-              headers: buildHeaders(token, tokenType, spoofBrowser),
+              headers: buildHeaders(token, tokenType),
               body: JSON.stringify({ content }),
             });
 
@@ -151,14 +127,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ details });
     }
 
-    // 4. 招待リンクからのサーバー参加（エラー詳細出力強化版）
+    // 4. 招待リンクからのサーバー参加
     if (action === 'joinGuild') {
       const { inviteCode } = body;
       if (!inviteCode) {
         return NextResponse.json({ error: '招待コードが指定されていません。' }, { status: 400 });
       }
 
-      // 招待コードのパースを堅牢化（末尾のスラッシュや余計なクエリパラメータを除外）
       const trimmed = inviteCode.trim();
       const cleanCode = trimmed.includes('/') 
         ? trimmed.split('/').filter(Boolean).pop()?.split('?')[0] 
@@ -172,7 +147,7 @@ export async function POST(req: NextRequest) {
         try {
           const res = await fetch(`https://discord.com/api/v10/invites/${cleanCode}`, {
             method: 'POST',
-            headers: buildHeaders(token, tokenType, spoofBrowser),
+            headers: buildHeaders(token, tokenType),
             body: JSON.stringify({}),
           });
 
@@ -184,7 +159,6 @@ export async function POST(req: NextRequest) {
               guildName: data.guild?.name || '不明なサーバー',
             });
           } else {
-            // Discordから返された詳細なエラー内容をパースする
             const errData = await res.json().catch(() => ({}));
             const errMessage = errData.message || `HTTP ${res.status}`;
             const errCode = errData.code ? ` (Code: ${errData.code})` : '';
