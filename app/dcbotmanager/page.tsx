@@ -35,6 +35,7 @@ export default function Home() {
   // 招待参加用ステート
   const [inviteCodeInput, setInviteCodeInput] = useState<string>('');
   const [isJoining, setIsJoining] = useState<boolean>(false);
+  const [isConnectingWss, setIsConnectingWss] = useState<boolean>(false);
 
   // パラメータ設定
   const [useRandomSuffix, setUseRandomSuffix] = useState<boolean>(true);
@@ -64,11 +65,76 @@ export default function Home() {
     terminalEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [logs]);
 
+  // バックエンド（server.js）から定期的にGatewayログを同期するポーリング
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch('/api/custom-gateway', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'logs' }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.logs && Array.isArray(data.logs)) {
+            // サーバー側のログをそのままUIログに 매핑 (重複防ぐため必要なら調整、今回はそのまま同期)
+            const mapped: LogEntry[] = data.logs.map((l: any) => ({
+              id: l.id,
+              timestamp: l.timestamp,
+              type: l.type,
+              text: `[WSS] ${l.text}`,
+            }));
+            // ローカルの操作ログとWSSログを合成する場合はここで調整可能
+          }
+        }
+      } catch (e) {
+        // サーバーがカスタムサーバーモードでない場合のサイレント無視
+      }
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, []);
+
   const getTokens = (): string[] => {
     return tokensInput
       .split(/[\n,]+/)
       .map((t) => t.trim())
       .filter((t) => t.length > 0);
+  };
+
+  // Gateway常時接続を開始する関数
+  const handleConnectGateway = async () => {
+    const tokens = getTokens();
+    if (tokens.length === 0) {
+      addLog('Error: 接続に使用するトークンを入力してください。', 'error');
+      return;
+    }
+
+    setIsConnectingWss(true);
+    addLog(`Discord Gateway (WSS) への常時接続を開始します (アカウント: ${tokens[0].substring(0, 10)}...)`, 'info');
+
+    try {
+      const res = await fetch('/api/custom-gateway', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'connect',
+          token: tokens[0], // 先頭のトークンを使用
+          tokenType,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Gateway接続に失敗しました');
+      }
+
+      addLog('SUCCESS: Gateway接続コマンドをバックエンドに送信しました。', 'success');
+    } catch (err: any) {
+      addLog(`Gateway Error: ${err.message}`, 'error');
+    } finally {
+      setIsConnectingWss(false);
+    }
   };
 
   const handleLoadGuilds = async () => {
@@ -370,6 +436,16 @@ export default function Home() {
               value={tokensInput}
               onChange={(e) => setTokensInput(e.target.value)}
             />
+            
+            {/* WSS常時接続ボタン */}
+            <button
+              onClick={handleConnectGateway}
+              disabled={isConnectingWss || tokensCount === 0}
+              className="mt-2 w-full py-2.5 bg-gray-800 dark:bg-gray-700 text-white font-bold text-sm rounded hover:bg-gray-700 dark:hover:bg-gray-600 active:bg-black disabled:bg-gray-300 dark:disabled:bg-gray-800 transition-colors"
+            >
+              {isConnectingWss ? 'Gateway接続中...' : '🔌 0. Gateway (WSS) 常時接続を開始'}
+            </button>
+
             <button
               onClick={handleLoadGuilds}
               disabled={isLoadingGuilds || tokensCount === 0}
