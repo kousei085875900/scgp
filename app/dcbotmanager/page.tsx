@@ -49,7 +49,7 @@ export default function Home() {
 
   // ターミナルログ用ステート
   const [logs, setLogs] = useState<LogEntry[]>([]);
-  const terminalEndRef = useRef<HTMLDivElement>(null);
+  const terminalRef = useRef<HTMLDivElement>(null);
 
   const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -60,9 +60,11 @@ export default function Home() {
     setLogs((prev) => [...prev, { id: Math.random().toString(36).substring(2, 9), timestamp, type, text }]);
   };
 
-  // ログが追加されたら自動で一番下にスクロール
+  // ログが追加されたらターミナルボックス内だけ一番下にスクロール（ページ全体は動かない）
   useEffect(() => {
-    terminalEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (terminalRef.current) {
+      terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
+    }
   }, [logs]);
 
   // バックエンドから定期的にGatewayログを同期するポーリング
@@ -616,7 +618,7 @@ export default function Home() {
             </button>
           </div>
 
-          {/* 黒画面のターミナル風ログコンソール */}
+          {/* 黒画面のターミナル風ログコンソール（ターミナル内だけがスクロールする） */}
           <div className="space-y-2">
             <div className="flex justify-between items-center">
               <span className="text-xs font-bold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
@@ -632,7 +634,10 @@ export default function Home() {
               )}
             </div>
 
-            <div className="w-full h-64 bg-black border border-gray-800 rounded p-3 font-mono text-xs overflow-y-auto space-y-1 shadow-inner select-text">
+            <div 
+              ref={terminalRef}
+              className="w-full h-64 bg-black border border-gray-800 rounded p-3 font-mono text-xs overflow-y-auto space-y-1 shadow-inner select-text"
+            >
               {logs.length === 0 ? (
                 <span className="text-gray-600">system ready... waiting for actions.</span>
               ) : (
@@ -650,7 +655,6 @@ export default function Home() {
                   );
                 })
               )}
-              <div ref={terminalEndRef} />
             </div>
           </div>
         </div>
