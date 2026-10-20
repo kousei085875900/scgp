@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import WebSocket from 'ws';
 
 // サーバープロセスのメモリ上でWebSocketとログを保持
-// ※Next.jsのAPIルートはプロセスが生きている間、グローバル変数を維持できます
 declare global {
   var activeWs: WebSocket | null;
   var heartbeatTimer: NodeJS.Timeout | null;
@@ -52,7 +51,7 @@ function connectGateway(token: string, tokenType: 'bot' | 'user') {
         global.heartbeatTimer = setInterval(() => {
           if (global.activeWs && global.activeWs.readyState === WebSocket.OPEN) {
             addGatewayLog('[SEND] Heartbeat (Op 1)', 'info');
-            global.activeWs.send(JSON.stringify({ op: 1, d: null }));
+            global.activeWs?.send(JSON.stringify({ op: 1, d: null }));
           }
         }, interval);
 
@@ -80,7 +79,7 @@ function connectGateway(token: string, tokenType: 'bot' | 'user') {
             }
           }
         };
-        global.activeWs.send(JSON.stringify(identifyPayload));
+        global.activeWs?.send(JSON.stringify(identifyPayload));
       }
 
       if (t === 'READY') {
