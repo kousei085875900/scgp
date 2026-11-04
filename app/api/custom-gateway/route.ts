@@ -106,8 +106,8 @@ function connectGateway(token: string, tokenType: 'bot' | 'user') {
     global.activeSessions.delete(token);
   });
 
-  // セッションをMapに保存
-  global.activeSessions.set(token, { ws, heartbeatTimer!, token });
+  // セッションをMapに保存（! を削除）
+  global.activeSessions.set(token, { ws, heartbeatTimer, token });
 }
 
 export async function POST(req: NextRequest) {
