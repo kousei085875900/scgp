@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import WebSocket from 'ws';
 
-// セッション情報を保持する型
+// セッション情報を保持する型（heartbeatTimerをnull許容に変更）
 interface GatewaySession {
   ws: WebSocket;
-  heartbeatTimer: NodeJS.Timeout;
+  heartbeatTimer: NodeJS.Timeout | null;
   token: string;
 }
 
@@ -28,7 +28,7 @@ function connectGateway(token: string, tokenType: 'bot' | 'user') {
   if (global.activeSessions.has(token)) {
     const existing = global.activeSessions.get(token)!;
     try { existing.ws.terminate(); } catch (e) {}
-    clearInterval(existing.heartbeatTimer);
+    if (existing.heartbeatTimer) clearInterval(existing.heartbeatTimer);
     global.activeSessions.delete(token);
   }
 
@@ -37,7 +37,11 @@ function connectGateway(token: string, tokenType: 'bot' | 'user') {
 
   const ws = new WebSocket(gatewayUrl);
 
-  let heartbeatTimer: NodeJS.Timeout;
+  let heartbeatTimer: NodeJS.Timeout | null = null;
+
+  // セッション情報を先にMapに登録（heartbeatTimerは後から代入される）
+  const session: GatewaySession = { ws, heartbeatTimer, token };
+  global.activeSessions.set(token, session);
 
   ws.on('open', () => {
     addGatewayLog(`Connected to Discord Gateway successfully! [${token.substring(0, 6)}...]`, 'success');
@@ -60,6 +64,9 @@ function connectGateway(token: string, tokenType: 'bot' | 'user') {
             ws.send(JSON.stringify({ op: 1, d: null }));
           }
         }, interval);
+
+        // Map内のセッションオブジェクトのタイマーを更新
+        session.heartbeatTimer = heartbeatTimer;
 
         addGatewayLog(`[SEND] Identifying to gateway (Op 2)...`, 'info');
         const identifyPayload = {
@@ -102,12 +109,9 @@ function connectGateway(token: string, tokenType: 'bot' | 'user') {
 
   ws.on('close', (code: number, reason: Buffer) => {
     addGatewayLog(`WSS CLOSED [${token.substring(0, 6)}...]: Code ${code}, Reason: ${reason.toString() || 'None'}`, 'warn');
-    if (heartbeatTimer) clearInterval(heartbeatTimer);
+    if (session.heartbeatTimer) clearInterval(session.heartbeatTimer);
     global.activeSessions.delete(token);
   });
-
-  // セッションをMapに保存（! を削除）
-  global.activeSessions.set(token, { ws, heartbeatTimer, token });
 }
 
 export async function POST(req: NextRequest) {
