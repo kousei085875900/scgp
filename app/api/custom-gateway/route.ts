@@ -1,13 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import WebSocket from 'ws';
 
-// サーバープロセスのメモリ上でWebSocketとログを保持
+// セッション情報を保持する型
+interface GatewaySession {
+  ws: WebSocket;
+  heartbeatTimer: NodeJS.Timeout;
+  token: string;
+}
+
 declare global {
-  var activeWs: WebSocket | null;
-  var heartbeatTimer: NodeJS.Timeout | null;
+  var activeSessions: Map<string, GatewaySession>;
   var gatewayLogs: Array<{ id: string; timestamp: string; type: 'info' | 'success' | 'error' | 'warn'; text: string }>;
 }
 
+if (!global.activeSessions) global.activeSessions = new Map();
 if (!global.gatewayLogs) global.gatewayLogs = [];
 
 function addGatewayLog(text: string, type: 'info' | 'success' | 'error' | 'warn' = 'info') {
@@ -18,23 +24,23 @@ function addGatewayLog(text: string, type: 'info' | 'success' | 'error' | 'warn'
 }
 
 function connectGateway(token: string, tokenType: 'bot' | 'user') {
-  if (global.activeWs) {
-    try { global.activeWs.terminate(); } catch (e) {}
-    global.activeWs = null;
-  }
-  if (global.heartbeatTimer) {
-    clearInterval(global.heartbeatTimer);
-    global.heartbeatTimer = null;
+  // すでに同じトークンで接続中なら一度切断・クリーンアップ
+  if (global.activeSessions.has(token)) {
+    const existing = global.activeSessions.get(token)!;
+    try { existing.ws.terminate(); } catch (e) {}
+    clearInterval(existing.heartbeatTimer);
+    global.activeSessions.delete(token);
   }
 
   const gatewayUrl = 'wss://gateway.discord.gg/?v=10&encoding=json';
-  addGatewayLog(`Connecting to gateway: ${gatewayUrl}`, 'info');
+  addGatewayLog(`Connecting to gateway for token prefix [${token.substring(0, 6)}...]: ${gatewayUrl}`, 'info');
 
   const ws = new WebSocket(gatewayUrl);
-  global.activeWs = ws;
+
+  let heartbeatTimer: NodeJS.Timeout;
 
   ws.on('open', () => {
-    addGatewayLog('Connected to Discord Gateway successfully!', 'success');
+    addGatewayLog(`Connected to Discord Gateway successfully! [${token.substring(0, 6)}...]`, 'success');
   });
 
   ws.on('message', (data: WebSocket.Data) => {
@@ -42,20 +48,20 @@ function connectGateway(token: string, tokenType: 'bot' | 'user') {
       const packet = JSON.parse(data.toString());
       const { t, s, op, d } = packet;
 
-      addGatewayLog(`[RECV] Opcode: ${op}${t ? ` | Event: ${t}` : ''}${s ? ` | Seq: ${s}` : ''}`, 'info');
+      addGatewayLog(`[RECV] [${token.substring(0, 6)}...] Opcode: ${op}${t ? ` | Event: ${t}` : ''}${s ? ` | Seq: ${s}` : ''}`, 'info');
 
       if (op === 10) {
         const interval = d.heartbeat_interval;
         addGatewayLog(`[HELLO] Heartbeat interval received: ${interval}ms`, 'info');
 
-        global.heartbeatTimer = setInterval(() => {
-          if (global.activeWs && global.activeWs.readyState === WebSocket.OPEN) {
-            addGatewayLog('[SEND] Heartbeat (Op 1)', 'info');
-            global.activeWs?.send(JSON.stringify({ op: 1, d: null }));
+        heartbeatTimer = setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) {
+            addGatewayLog(`[SEND] Heartbeat (Op 1) [${token.substring(0, 6)}...]`, 'info');
+            ws.send(JSON.stringify({ op: 1, d: null }));
           }
         }, interval);
 
-        addGatewayLog('[SEND] Identifying to gateway (Op 2)...', 'info');
+        addGatewayLog(`[SEND] Identifying to gateway (Op 2)...`, 'info');
         const identifyPayload = {
           op: 2,
           d: {
@@ -79,7 +85,7 @@ function connectGateway(token: string, tokenType: 'bot' | 'user') {
             }
           }
         };
-        global.activeWs?.send(JSON.stringify(identifyPayload));
+        ws.send(JSON.stringify(identifyPayload));
       }
 
       if (t === 'READY') {
@@ -91,13 +97,17 @@ function connectGateway(token: string, tokenType: 'bot' | 'user') {
   });
 
   ws.on('error', (err: Error) => {
-    addGatewayLog(`WSS ERROR: ${err.message}`, 'error');
+    addGatewayLog(`WSS ERROR [${token.substring(0, 6)}...]: ${err.message}`, 'error');
   });
 
   ws.on('close', (code: number, reason: Buffer) => {
-    addGatewayLog(`WSS CLOSED: Code ${code}, Reason: ${reason.toString() || 'None'}`, 'warn');
-    if (global.heartbeatTimer) clearInterval(global.heartbeatTimer);
+    addGatewayLog(`WSS CLOSED [${token.substring(0, 6)}...]: Code ${code}, Reason: ${reason.toString() || 'None'}`, 'warn');
+    if (heartbeatTimer) clearInterval(heartbeatTimer);
+    global.activeSessions.delete(token);
   });
+
+  // セッションをMapに保存
+  global.activeSessions.set(token, { ws, heartbeatTimer!, token });
 }
 
 export async function POST(req: NextRequest) {
@@ -110,11 +120,18 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Token is required' }, { status: 400 });
       }
       connectGateway(token, tokenType || 'bot');
-      return NextResponse.json({ success: true, message: 'Gateway connection initiated' });
+      return NextResponse.json({ 
+        success: true, 
+        message: 'Gateway connection initiated',
+        activeCount: global.activeSessions.size 
+      });
     }
 
     if (action === 'logs') {
-      return NextResponse.json({ logs: global.gatewayLogs || [] });
+      return NextResponse.json({ 
+        logs: global.gatewayLogs || [],
+        activeSessionsCount: global.activeSessions.size 
+      });
     }
 
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
