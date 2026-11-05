@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import WebSocket from 'ws';
 
-// セッション情報を保持する型（heartbeatTimerをnull許容に変更）
 interface GatewaySession {
-  ws: WebSocket;
+  ws: WebSocket | null;
   heartbeatTimer: NodeJS.Timeout | null;
   token: string;
+  tokenType: 'bot' | 'user';
+  isConnecting: boolean;
 }
 
 declare global {
@@ -20,30 +21,39 @@ function addGatewayLog(text: string, type: 'info' | 'success' | 'error' | 'warn'
   const now = new Date();
   const timestamp = now.toTimeString().split(' ')[0] + '.' + String(now.getMilliseconds()).padStart(3, '0');
   global.gatewayLogs.push({ id: Math.random().toString(36).substring(2, 9), timestamp, type, text });
-  if (global.gatewayLogs.length > 100) global.gatewayLogs.shift();
+  if (global.gatewayLogs.length > 150) global.gatewayLogs.shift();
 }
 
 function connectGateway(token: string, tokenType: 'bot' | 'user') {
-  // すでに同じトークンで接続中なら一度切断・クリーンアップ
+  // すでにセッションが存在する場合は、既存の接続を生かすかクリーンアップする
   if (global.activeSessions.has(token)) {
     const existing = global.activeSessions.get(token)!;
-    try { existing.ws.terminate(); } catch (e) {}
+    if (existing.ws && existing.ws.readyState === WebSocket.OPEN) {
+      addGatewayLog(`Session already active for [${token.substring(0, 6)}...]. Skipping duplicate connect.`, 'info');
+      return;
+    }
+    // 壊れているなら掃除する
+    try { existing.ws?.terminate(); } catch (e) {}
     if (existing.heartbeatTimer) clearInterval(existing.heartbeatTimer);
-    global.activeSessions.delete(token);
   }
+
+  const session: GatewaySession = {
+    ws: null,
+    heartbeatTimer: null,
+    token,
+    tokenType,
+    isConnecting: true
+  };
+  global.activeSessions.set(token, session);
 
   const gatewayUrl = 'wss://gateway.discord.gg/?v=10&encoding=json';
   addGatewayLog(`Connecting to gateway for token prefix [${token.substring(0, 6)}...]: ${gatewayUrl}`, 'info');
 
   const ws = new WebSocket(gatewayUrl);
-
-  let heartbeatTimer: NodeJS.Timeout | null = null;
-
-  // セッション情報を先にMapに登録（heartbeatTimerは後から代入される）
-  const session: GatewaySession = { ws, heartbeatTimer, token };
-  global.activeSessions.set(token, session);
+  session.ws = ws;
 
   ws.on('open', () => {
+    session.isConnecting = false;
     addGatewayLog(`Connected to Discord Gateway successfully! [${token.substring(0, 6)}...]`, 'success');
   });
 
@@ -52,23 +62,22 @@ function connectGateway(token: string, tokenType: 'bot' | 'user') {
       const packet = JSON.parse(data.toString());
       const { t, s, op, d } = packet;
 
+      // ログがうるさくなりすぎるのを防ぐためPRESENCE_UPDATEは一部間引くかそのまま流す
       addGatewayLog(`[RECV] [${token.substring(0, 6)}...] Opcode: ${op}${t ? ` | Event: ${t}` : ''}${s ? ` | Seq: ${s}` : ''}`, 'info');
 
       if (op === 10) {
         const interval = d.heartbeat_interval;
-        addGatewayLog(`[HELLO] Heartbeat interval received: ${interval}ms`, 'info');
+        addGatewayLog(`[HELLO] Heartbeat interval received: ${interval}ms [${token.substring(0, 6)}...]`, 'info');
 
-        heartbeatTimer = setInterval(() => {
+        if (session.heartbeatTimer) clearInterval(session.heartbeatTimer);
+        session.heartbeatTimer = setInterval(() => {
           if (ws.readyState === WebSocket.OPEN) {
             addGatewayLog(`[SEND] Heartbeat (Op 1) [${token.substring(0, 6)}...]`, 'info');
             ws.send(JSON.stringify({ op: 1, d: null }));
           }
         }, interval);
 
-        // Map内のセッションオブジェクトのタイマーを更新
-        session.heartbeatTimer = heartbeatTimer;
-
-        addGatewayLog(`[SEND] Identifying to gateway (Op 2)...`, 'info');
+        addGatewayLog(`[SEND] Identifying to gateway (Op 2)... [${token.substring(0, 6)}...]`, 'info');
         const identifyPayload = {
           op: 2,
           d: {
@@ -96,10 +105,10 @@ function connectGateway(token: string, tokenType: 'bot' | 'user') {
       }
 
       if (t === 'READY') {
-        addGatewayLog(`[READY] Logged in as: ${d.user.username} (ID: ${d.user.id}) | Guilds: ${d.guilds.length}`, 'success');
+        addGatewayLog(`[READY] Logged in as: ${d.user.username} (ID: ${d.user.id}) | Guilds: ${d.guilds.length} [${token.substring(0, 6)}...]`, 'success');
       }
     } catch (err: any) {
-      addGatewayLog(`Packet parse error: ${err.message}`, 'error');
+      addGatewayLog(`Packet parse error [${token.substring(0, 6)}...]: ${err.message}`, 'error');
     }
   });
 
@@ -110,7 +119,15 @@ function connectGateway(token: string, tokenType: 'bot' | 'user') {
   ws.on('close', (code: number, reason: Buffer) => {
     addGatewayLog(`WSS CLOSED [${token.substring(0, 6)}...]: Code ${code}, Reason: ${reason.toString() || 'None'}`, 'warn');
     if (session.heartbeatTimer) clearInterval(session.heartbeatTimer);
-    global.activeSessions.delete(token);
+    
+    // 自動再接続（5秒後にリトライ）
+    addGatewayLog(`Scheduling auto-reconnect for [${token.substring(0, 6)}...] in 5 seconds...`, 'warn');
+    setTimeout(() => {
+      // まだセッションマップに生きていれば再接続を試みる
+      if (global.activeSessions.has(token)) {
+        connectGateway(token, tokenType);
+      }
+    }, 5000);
   });
 }
 
@@ -126,7 +143,7 @@ export async function POST(req: NextRequest) {
       connectGateway(token, tokenType || 'bot');
       return NextResponse.json({ 
         success: true, 
-        message: 'Gateway connection initiated',
+        message: 'Gateway connection initiated with auto-reconnect',
         activeCount: global.activeSessions.size 
       });
     }
