@@ -358,7 +358,7 @@ export default function Home() {
     <div className="space-y-8 w-full max-w-3xl mx-auto p-4 sm:p-6 font-sans">
       <div className="space-y-2">
         <h1 className="text-4xl sm:text-6xl font-black text-red-600 tracking-tight leading-tight">
-          。<br />
+          v4<br />
         </h1>
       </div>
 
